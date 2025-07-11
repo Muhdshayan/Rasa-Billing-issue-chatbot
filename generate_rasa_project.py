@@ -86,10 +86,10 @@ class Graph:
                 return
             node = self.nodes[idx]
             # Add intent and all actions for this node
-            path = path + (
-                [{"intent": node.intent}] +
-                ([{"actions": node.actions}] if node.actions else [])
-            )
+            path = path + [{"intent": node.intent}]
+            if node.actions:
+                for action in node.actions:
+                    path.append({"action": action})
             logger.debug(f"Visiting node {idx}: intent={node.intent}, path length={len(path)//2}")
             if not self.adj_list[idx]:
                 logger.debug(f"Reached leaf node {idx}: adding story {path}")
@@ -116,11 +116,10 @@ class Graph:
             logger.debug(f"Processing node {idx}: intent={node.intent}")
             if not self.adj_list[idx] and node.intent not in exclude_intents:
                 # Independent node with no outgoing edges and not excluded by user
-                story = [
-                    {"intent": node.intent},
-                    {"actions": node.actions} if node.actions else None
-                ]
-                story = [x for x in story if x]
+                story = [{"intent": node.intent}]
+                if node.actions:
+                    for action in node.actions:
+                        story.append({"action": action})
                 logger.debug(f"Adding story for independent node {idx}: intent={node.intent}, story={story}")
                 stories.append(story)
                 global_visited.add(idx)
@@ -225,31 +224,30 @@ def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
         examples.append(example)
     if examples:
         step['examples'] = examples
-    # Responses
+    
+    # Actions and Responses (multiple actions version)
+    actions = []
     responses = []
-    print(f"  b) Enter responses for '{step['intent']}' (enter blank to finish):")
+    print(f"  b) Enter actions and their responses for '{step['intent']}' (enter blank action to finish):")
+    action_count = 1
     while True:
-        response = input("    - ").strip()
-        if not response:
+        action = input(f"    - Action {action_count}: ").strip()
+        if not action:
             break
+        
+        # Get response for this action
+        response = get_nonempty(f"      ↳ Response for '{action}': ")
+        
+        actions.append(action)
         responses.append(response)
-    if responses:
+        action_count += 1
+    
+    if actions:
+        step['actions'] = actions
         step['responses'] = responses
-    # Actions (single action version)
-    action = get_nonempty(f"  c) Enter action name for '{step['intent']}': ")
-    step['actions'] = [action]
-    # # Multi-action version (commented out)
-    # actions = []
-    # print(f"  c) Enter actions for '{step['intent']}' (enter blank to finish):")
-    # while True:
-    #     action = input("    - ").strip()
-    #     if not action:
-    #         break
-    #     actions.append(action)
-    # if actions:
-    #     step['actions'] = actions
+    
     # Fallback
-    if get_yes_no("  d) Will you define a fallback path for this step?"):
+    if get_yes_no("  c) Will you define a fallback path for this step?"):
         print("    ↳ Available steps:")
         for idx, name in enumerate(all_intents or []):
             print(f"      {idx}: {name}")
@@ -257,12 +255,12 @@ def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
     else:
         step["fallback_target"] = None
     # Entities
-    if get_yes_no("  e) Does this step use Entities?"):
+    if get_yes_no("  d) Does this step use Entities?"):
         step["entities"] = gather_entities(index+1)
     else:
         step["entities"] = []
     # Outgoing paths
-    num_paths = get_int(f"  f) Number of outgoing paths from step {index+1}: ", min_value=0)
+    num_paths = get_int(f"  e) Number of outgoing paths from step {index+1}: ", min_value=0)
     step["num_outgoing_paths"] = num_paths
     if num_paths > 0:
         step["next"] = gather_paths(index+1, num_paths, all_intents or [])
@@ -281,8 +279,13 @@ def review_and_edit(bot, step_intents):
             print(f"Step {i+1}:")
             print(f"  Intent: {step['intent']}")
             print(f"  Examples: {step['examples']}")
-            print(f"  Responses: {step['responses']}")
-            print(f"  Actions: {step['actions']}")
+            print(f"  Actions and Responses:")
+            actions = step.get('actions', [])
+            responses = step.get('responses', [])
+            for j, (action, response) in enumerate(zip(actions, responses)):
+                print(f"    {j+1}. Action: {action} -> Response: {response}")
+            if len(actions) != len(responses):
+                print(f"    Note: {len(actions)} actions but {len(responses)} responses")
             print(f"  Entities: {step['entities']}")
             print(f"  Outgoing Paths: {step.get('next', [])}")
             print(f"  Fallback Target: {step.get('fallback_target')}")
@@ -408,7 +411,6 @@ def main():
         ("version", "3.1"),
         ("intents", []),
         ("entities", []),
-        ("slots", {}),
         ("responses", OrderedDict()),
         ("actions", [])
     ])
@@ -423,23 +425,22 @@ def main():
             ent_name = ent.get("name") if isinstance(ent, dict) else ent
             if ent_name and ent_name not in domain["entities"]:
                 domain["entities"].append(ent_name)
-        # Add only the first action to domain["actions"] and responses
-        action = step.get("actions", [None])[0]
-        if action:
-            all_actions.add(action)
-            if action.startswith("utter_"):
-                resp_text = step["responses"][0] if step["responses"] else "Default response"
-                domain["responses"][action] = [{"text": resp_text}]
+        # Add actions to responses or actions list
+        actions = step.get("actions", [])
+        responses = step.get("responses", [])
+        for i, action in enumerate(actions):
+            if action:
+                if action.startswith("utter_"):
+                    resp_text = responses[i] if i < len(responses) else "Default response"
+                    domain["responses"][action] = [{"text": resp_text}]
+                else:
+                    all_actions.add(action)
     # fallback intent
     if "nlu_fallback" not in domain["intents"]:
         domain["intents"].append("nlu_fallback")
-    # for ent in domain["entities"]:
-    #     domain["slots"][ent] = {"type": "text"}
-    # Add all actions to domain["actions"] (except utter_ ones, which are in responses)
-    domain["actions"] = [a for a in all_actions if not a.startswith("utter_")]
+    domain["actions"] = list(all_actions)
     domain["responses"]["utter_default"] = [{"text": "Sorry, I didn't get that. Could you rephrase?"}]
     if not domain["entities"]: del domain["entities"]
-    # if not domain["slots"]: del domain["slots"]
     yaml_dump(domain, "domain.yml")
 
     # 5) Build data/nlu.yml
@@ -485,15 +486,11 @@ def main():
                     if intent_entities:
                         intent_step["entities"] = intent_entities
                 story_steps.append(intent_step)
-            # Only add the first action
+            # Add all actions for this step
             if "actions" in step:
-                action = step["actions"][0] if step["actions"] else None
-                if action:
-                    story_steps.append({"action": action})
-            # # Multi-action version (commented out)
-            # if "actions" in step:
-            #     for action in step["actions"]:
-            #         story_steps.append({"action": action})
+                for action in step["actions"]:
+                    if action:
+                        story_steps.append({"action": action})
             if "action" in step:  # for backward compatibility
                 story_steps.append({"action": step["action"]})
         stories_yaml["stories"].append({"story": f"story_{i+1}", "steps": story_steps})
