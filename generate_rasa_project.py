@@ -272,9 +272,10 @@ def review_and_edit(bot, step_intents):
     while True:
         clear_screen()
         print("\n===== Review Your Bot Configuration =====\n")
+        total_steps = bot.get('total_steps', len(bot['steps']))
         print(f"Bot Name: {bot['name']}")
         print(f"Description: {bot['description']}")
-        print(f"Total Steps: {len(bot['steps'])}\n")
+        print(f"Total Steps: {len(bot['steps'])}/{total_steps}\n")
         for i, step in enumerate(bot['steps']):
             print(f"Step {i+1}:")
             print(f"  Intent: {step['intent']}")
@@ -305,6 +306,7 @@ def review_and_edit(bot, step_intents):
             all_intents = [s['intent'] for s in bot['steps']]
             updated_step = collect_step_data(idx, existing_step=bot['steps'][idx], all_intents=all_intents)
             bot['steps'][idx] = updated_step
+            save_bot_data(bot)  # Save after editing
         elif choice == 'a':
             # Add a new step
             intent = get_nonempty(f"  New intent name: ")
@@ -316,6 +318,7 @@ def review_and_edit(bot, step_intents):
             all_intents = [s['intent'] for s in bot['steps']] + [intent]
             step = collect_step_data(i, intent, all_intents=all_intents)
             bot['steps'].append(step)
+            save_bot_data(bot)  # Save after adding
         elif choice == 'r':
             if not bot['steps']:
                 print("No steps to remove.")
@@ -345,6 +348,7 @@ def review_and_edit(bot, step_intents):
                         new_next.append(path)
                     step['next'] = new_next
             print(f"Step '{removed_intent}' removed! Press Enter to continue...")
+            save_bot_data(bot)  # Save after removing
             input()
         elif choice == 'q':
             print("Exiting without saving.")
@@ -353,31 +357,160 @@ def review_and_edit(bot, step_intents):
             print("Invalid option. Try again.")
             input("Press Enter to continue...")
 
+def load_saved_data():
+    """Load saved bot data from file if it exists."""
+    # First check for bot_save.json (our save file)
+    if os.path.exists("bot_save.json"):
+        try:
+            with open("bot_save.json", "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️  Error loading saved data: {e}")
+            return None
+    
+    # Also check for bot_config.json (from bot_json_builder.py)
+    if os.path.exists("bot_config.json"):
+        try:
+            with open("bot_config.json", "r") as f:
+                data = json.load(f)
+                print("📁 Found bot_config.json from bot_json_builder.py")
+                return data
+        except Exception as e:
+            print(f"⚠️  Error loading bot_config.json: {e}")
+            return None
+    
+    # Check for generated_bot_config.json (from this script)
+    if os.path.exists("generated_bot_config.json"):
+        try:
+            with open("generated_bot_config.json", "r") as f:
+                data = json.load(f)
+                print("📁 Found generated_bot_config.json from previous run")
+                return data
+        except Exception as e:
+            print(f"⚠️  Error loading generated_bot_config.json: {e}")
+            return None
+    
+    return None
+
+def save_bot_data(bot):
+    """Save bot data to file."""
+    try:
+        with open("bot_save.json", "w") as f:
+            json.dump(bot, f, indent=2)
+        print("💾 Progress saved to bot_save.json")
+    except Exception as e:
+        print(f"⚠️  Error saving data: {e}")
+
+def save_final_config(bot):
+    """Save final bot configuration to JSON file."""
+    try:
+        with open("generated_bot_config.json", "w") as f:
+            json.dump(bot, f, indent=2)
+        print("💾 Final configuration saved to generated_bot_config.json")
+    except Exception as e:
+        print(f"⚠️  Error saving final configuration: {e}")
+
 def main():
     clear_screen()
     print("\n🎯 Welcome to the Rasa Chatbot Step-by-Step Builder & Generator!\n")
-    bot = {}
-    bot["name"] = get_nonempty("0) Chatbot Name: ")
-    bot["description"] = get_nonempty("1) Bot Description: ")
-    total_steps = get_int("2) Number of Steps (nodes): ", min_value=1)
-    bot["steps"] = []
+    
+    # Check for saved data
+    saved_bot = load_saved_data()
+    if saved_bot:
+        print("📁 Found saved bot data!")
+        print(f"Bot Name: {saved_bot.get('name', 'Unknown')}")
+        print(f"Description: {saved_bot.get('description', 'Unknown')}")
+        total_steps = saved_bot.get('total_steps', len(saved_bot.get('steps', [])))
+        completed_steps = len(saved_bot.get('steps', []))
+        print(f"Progress: {completed_steps}/{total_steps} steps completed")
+        
+        if "intent_names" in saved_bot:
+            print(f"Intent names: {', '.join(saved_bot['intent_names'])}")
+        
+        # Show available files
+        available_files = []
+        if os.path.exists("bot_save.json"):
+            available_files.append("bot_save.json (auto-save)")
+        if os.path.exists("bot_config.json"):
+            available_files.append("bot_config.json (from builder)")
+        if os.path.exists("generated_bot_config.json"):
+            available_files.append("generated_bot_config.json (previous run)")
+        
+        if len(available_files) > 1:
+            print(f"\nAvailable files: {', '.join(available_files)}")
+        
+        if get_yes_no("Do you want to continue from saved data?"):
+            bot = saved_bot
+            # Use saved intent names if available, otherwise extract from steps
+            if "intent_names" in bot:
+                step_intents = bot["intent_names"]
+                print(f"✅ Loading saved data with {len(step_intents)} intent names...")
+            else:
+                # Fallback: extract from existing steps
+                step_intents = [step['intent'] for step in bot['steps']]
+                print("✅ Loading saved data...")
+        else:
+            # Clear saved data and start fresh
+            if os.path.exists("bot_save.json"):
+                os.remove("bot_save.json")
+            if os.path.exists("bot_config.json"):
+                os.remove("bot_config.json")
+            if os.path.exists("generated_bot_config.json"):
+                os.remove("generated_bot_config.json")
+            bot = {}
+            step_intents = []
+    else:
+        bot = {}
+        step_intents = []
+    
+    # If starting fresh or user chose to start fresh
+    if not bot:
+        bot["name"] = get_nonempty("0) Chatbot Name: ")
+        bot["description"] = get_nonempty("1) Bot Description: ")
+        total_steps = get_int("2) Number of Steps (nodes): ", min_value=1)
+        bot["total_steps"] = total_steps
+        bot["steps"] = []
 
-    # First, collect all intent names
-    print("\nEnter intent names for each step:")
-    step_intents = []
-    for i in range(total_steps):
-        intent = get_nonempty(f"  Intent name for step {i+1}: ")
-        step_intents.append(intent)
+        # First, collect all intent names
+        print("\nEnter intent names for each step:")
+        for i in range(total_steps):
+            intent = get_nonempty(f"  Intent name for step {i+1}: ")
+            step_intents.append(intent)
+        
+        # Save the intent names in the bot data
+        bot["intent_names"] = step_intents.copy()
+        
+        # Save initial data with all intent names
+        save_bot_data(bot)
+        print(f"💾 Saved initial data: {total_steps} steps with intent names")
 
     # Now, for each step, collect the rest of the info
-    for i in range(total_steps):
+    total_steps = bot.get("total_steps", len(step_intents))
+    print(f"\n📋 Working on {len(bot['steps'])}/{total_steps} steps completed")
+    
+    for i in range(len(bot["steps"]), total_steps):
         clear_screen()
         print(f"\n── Step {i+1} / {total_steps} ──")
+        print(f"Intent: {step_intents[i]}")
+        print(f"Progress: {len(bot['steps'])}/{total_steps} steps completed")
+        print("=" * 50)
+        
         step = collect_step_data(i, intent=step_intents[i], all_intents=step_intents)
         bot["steps"].append(step)
+        
+        # Save progress after each step
+        save_bot_data(bot)
+        print(f"✅ Step {i+1} completed! ({len(bot['steps'])}/{total_steps} done)")
+    
+    # Save configuration after completing all steps
+    save_final_config(bot)
 
     # Review and edit menu
     review_and_edit(bot, step_intents)
+    
+    # Save final data before generation
+    save_bot_data(bot)
+    save_final_config(bot)  # Save the final configuration
 
     # Prompt for independent intents to exclude from stories
     print("\nEnter comma-separated intent names you do NOT want to add as independent stories (leave blank to include all):")
@@ -387,13 +520,23 @@ def main():
     steps = bot["steps"]
     graph = Graph()
     for idx, step_data in enumerate(steps):
+        # Handle both old format (action) and new format (actions)
+        actions = step_data.get("actions", [])
+        if not actions and "action" in step_data:
+            actions = [step_data["action"]]
+        
+        # Handle responses - ensure it's always a list
+        responses = step_data.get("responses", [])
+        if not isinstance(responses, list):
+            responses = [responses] if responses else []
+        
         node = Node(
             index=idx,
             intent=step_data["intent"],
-            actions=step_data.get("actions", []),
-            responses=step_data["responses"],
-            examples=step_data["examples"],
-            entities=step_data["entities"],
+            actions=actions,
+            responses=responses,
+            examples=step_data.get("examples", []),
+            entities=step_data.get("entities", []),
             fallback_target=step_data.get("fallback_target"),
             use_custom_action=step_data.get("use_custom_action", False)
         )
@@ -427,7 +570,13 @@ def main():
                 domain["entities"].append(ent_name)
         # Add actions to responses or actions list
         actions = step.get("actions", [])
+        if not actions and "action" in step:
+            actions = [step["action"]]
+        
         responses = step.get("responses", [])
+        if not isinstance(responses, list):
+            responses = [responses] if responses else []
+        
         for i, action in enumerate(actions):
             if action:
                 if action.startswith("utter_"):
@@ -541,7 +690,20 @@ def main():
     ])
     yaml_dump(config, "config.yml")
 
+    # Clean up save file after successful generation
+    if os.path.exists("bot_save.json"):
+        os.remove("bot_save.json")
+        print("🗑️  Cleaned up save file")
+
     print("✅ Rasa project files generated!")
+    print("\n📁 Files created:")
+    print("   📄 generated_bot_config.json - Your complete bot configuration")
+    print("   📄 domain.yml - Rasa domain file with intents, entities, responses")
+    print("   📄 data/nlu.yml - Training data for intents and examples")
+    print("   📄 data/stories.yml - Conversation flows and stories")
+    print("   📄 data/rules.yml - Rules for fallback handling")
+    print("   📄 config.yml - Rasa pipeline and policy configuration")
+    print("\n💡 You can use generated_bot_config.json to recreate your bot or share it!")
 
 if __name__ == "__main__":
     main()
