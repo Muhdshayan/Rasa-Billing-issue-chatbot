@@ -5,6 +5,7 @@ from collections import OrderedDict, defaultdict
 import yaml
 import logging
 import sys
+import glob
 
 # Setup logging for debugging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -27,25 +28,27 @@ def yaml_dump(data, filename):
         else:
             return obj
     with open(filename, "w") as f:
-        yaml.safe_dump(convert_odict(data), f, sort_keys=False)
+        yaml.safe_dump(convert_odict(data), f, sort_keys=False, allow_unicode=True)
 
 # Node class for node metadata
 class Node:
-    def __init__(self, index, intent, actions, responses, examples, entities, fallback_target=None, use_custom_action=False):
+    def __init__(self, index, intent, actions, responses, examples, entities, slots=None, form=None, fallback_target=None, use_custom_action=False):
         self.index = index
         self.intent = intent
-        self.actions = actions  # list of actions
+        self.actions = actions
         self.responses = responses
         self.examples = examples
         self.entities = entities
+        self.slots = slots or []
+        self.form = form
         self.fallback_target = fallback_target
         self.use_custom_action = use_custom_action
 
 # Custom Graph class for conversation graph
 class Graph:
     def __init__(self):
-        self.nodes = {}  # index -> Node
-        self.adj_list = defaultdict(list)  # index -> [(target_index, trigger_intent)]
+        self.nodes = {}
+        self.adj_list = defaultdict(list)
 
     def add_node(self, node):
         logger.debug(f"Adding node: index={node.index}, intent={node.intent}")
@@ -65,10 +68,8 @@ class Graph:
         logger.debug(f"Removing node: index={index}, intent={self.nodes[index].intent}")
         del self.nodes[index]
         del self.adj_list[index]
-        # Remove edges pointing to this node
         for src in self.adj_list:
             self.adj_list[src] = [(tgt, intent) for tgt, intent in self.adj_list[src] if tgt != index]
-        logger.debug(f"Updated adjacency list after removing node {index}")
 
     def generate_stories(self, max_depth=10, exclude_intents=None):
         if exclude_intents is None:
@@ -85,14 +86,16 @@ class Graph:
                 logger.warning(f"Invalid node index {idx} encountered")
                 return
             node = self.nodes[idx]
-            # Add intent and all actions for this node
             path = path + [{"intent": node.intent}]
+            if node.form:
+                path.append({"action": node.form})
+                path.append({"active_loop": node.form})
+                path.append({"active_loop": None})
             if node.actions:
                 for action in node.actions:
                     path.append({"action": action})
             logger.debug(f"Visiting node {idx}: intent={node.intent}, path length={len(path)//2}")
             if not self.adj_list[idx]:
-                logger.debug(f"Reached leaf node {idx}: adding story {path}")
                 stories.append(path)
                 return
             visited.add(idx)
@@ -100,31 +103,29 @@ class Graph:
                 logger.debug(f"Exploring edge: {idx} -> {target_idx} (trigger={trigger_intent})")
                 dfs(target_idx, path, visited.copy(), depth + 1)
 
-        # Track nodes with incoming edges
         has_incoming = set()
         for src in self.adj_list:
             for tgt, _ in self.adj_list[src]:
                 has_incoming.add(tgt)
 
-        # Main loop: iterate through all nodes
         global_visited = set()
         logger.info("Starting story generation for all subgraphs")
-        for idx in sorted(self.nodes.keys()):  # Sort for consistent story order
+        for idx in sorted(self.nodes.keys()):
             if idx in global_visited or idx in has_incoming:
-                continue  # Skip if already visited or has incoming edges
+                continue
             node = self.nodes[idx]
-            logger.debug(f"Processing node {idx}: intent={node.intent}")
             if not self.adj_list[idx] and node.intent not in exclude_intents:
-                # Independent node with no outgoing edges and not excluded by user
                 story = [{"intent": node.intent}]
+                if node.form:
+                    story.append({"action": node.form})
+                    story.append({"active_loop": node.form})
+                    story.append({"active_loop": None})
                 if node.actions:
                     for action in node.actions:
                         story.append({"action": action})
-                logger.debug(f"Adding story for independent node {idx}: intent={node.intent}, story={story}")
                 stories.append(story)
                 global_visited.add(idx)
             elif self.adj_list[idx]:
-                # Node with outgoing edges: traverse subgraph
                 logger.info(f"Starting DFS for subgraph at node {idx}: intent={node.intent}")
                 dfs(idx, [], global_visited, 0)
 
@@ -181,7 +182,7 @@ def gather_entities(step_idx):
         use_regex = get_yes_no("    ↳ Use regex pattern for this entity?")
         regex = None
         if use_regex:
-            regex = get_nonempty("      ↳ Enter regex pattern: ")
+            regex = get_nonempty("      ↳ Enter regex pattern (e.g., \\d{{10}} for 10-digit phone): ")
         ents.append({
             "name": name,
             "use_lookup": use_lookup,
@@ -193,6 +194,41 @@ def gather_entities(step_idx):
         if not more:
             break
     return ents
+
+def gather_slots(step_idx):
+    slots = []
+    while True:
+        name = get_nonempty(f"  • Slot name for step {step_idx}: ")
+        slot_type = get_nonempty("    ↳ Slot type (e.g., text, float, categorical): ")
+        influence_conversation = get_yes_no("    ↳ Should this slot influence the conversation?")
+        if slot_type == "categorical":
+            print("      ↳ Enter possible values for categorical slot (one per line, blank to finish):")
+            values = []
+            while True:
+                val = input("        - ").strip()
+                if not val:
+                    break
+                values.append(val)
+            slots.append({"name": name, "type": slot_type, "influence_conversation": influence_conversation, "values": values})
+        else:
+            slots.append({"name": name, "type": slot_type, "influence_conversation": influence_conversation})
+        more = get_yes_no("  • Add another slot for this step?")
+        if not more:
+            break
+    return slots
+
+def gather_form(step_idx):
+    if get_yes_no(f"  • Does step {step_idx} use a form?"):
+        form_name = get_nonempty("    ↳ Form name: ")
+        print("    ↳ Enter required slots for this form (one per line, blank to finish):")
+        required_slots = []
+        while True:
+            slot = input("      - Slot name: ").strip()
+            if not slot:
+                break
+            required_slots.append(slot)
+        return {"name": form_name, "required_slots": required_slots}
+    return None
 
 def gather_paths(step_idx, num_paths, all_intents):
     paths = []
@@ -214,7 +250,6 @@ def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
         step['intent'] = intent
     else:
         step['intent'] = get_nonempty(f"  Intent name for step {index+1}: ")
-    # Examples
     examples = []
     print(f"  a) Enter example utterances for '{step['intent']}' (enter blank to finish):")
     while True:
@@ -224,8 +259,6 @@ def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
         examples.append(example)
     if examples:
         step['examples'] = examples
-    
-    # Actions and Responses (multiple actions version)
     actions = []
     responses = []
     print(f"  b) Enter actions and their responses for '{step['intent']}' (enter blank action to finish):")
@@ -234,33 +267,34 @@ def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
         action = input(f"    - Action {action_count}: ").strip()
         if not action:
             break
-        
-        # Get response for this action
-        response = get_nonempty(f"      ↳ Response for '{action}': ")
-        
+        is_custom = get_yes_no("      ↳ Is this a custom action (requires Python code)?")
+        response = None
+        if not is_custom:
+            response = get_nonempty(f"      ↳ Response for '{action}': ")
         actions.append(action)
         responses.append(response)
+        step['use_custom_action'] = step.get('use_custom_action', False) or is_custom
         action_count += 1
-    
     if actions:
         step['actions'] = actions
         step['responses'] = responses
-    
-    # Fallback
-    if get_yes_no("  c) Will you define a fallback path for this step?"):
+    if get_yes_no("  c) Does this step use slots?"):
+        step["slots"] = gather_slots(index+1)
+    else:
+        step["slots"] = []
+    step["form"] = gather_form(index+1)
+    if get_yes_no("  d) Will you define a fallback path for this step?"):
         print("    ↳ Available steps:")
         for idx, name in enumerate(all_intents or []):
             print(f"      {idx}: {name}")
         step["fallback_target"] = get_int("    ↳ Fallback target step index: ", min_value=0, max_value=index)
     else:
         step["fallback_target"] = None
-    # Entities
-    if get_yes_no("  d) Does this step use Entities?"):
+    if get_yes_no("  e) Does this step use entities?"):
         step["entities"] = gather_entities(index+1)
     else:
         step["entities"] = []
-    # Outgoing paths
-    num_paths = get_int(f"  e) Number of outgoing paths from step {index+1}: ", min_value=0)
+    num_paths = get_int(f"  f) Number of outgoing paths from step {index+1}: ", min_value=0)
     step["num_outgoing_paths"] = num_paths
     if num_paths > 0:
         step["next"] = gather_paths(index+1, num_paths, all_intents or [])
@@ -279,15 +313,15 @@ def review_and_edit(bot, step_intents):
         for i, step in enumerate(bot['steps']):
             print(f"Step {i+1}:")
             print(f"  Intent: {step['intent']}")
-            print(f"  Examples: {step['examples']}")
+            print(f"  Examples: {step.get('examples', [])}")
             print(f"  Actions and Responses:")
             actions = step.get('actions', [])
             responses = step.get('responses', [])
             for j, (action, response) in enumerate(zip(actions, responses)):
-                print(f"    {j+1}. Action: {action} -> Response: {response}")
-            if len(actions) != len(responses):
-                print(f"    Note: {len(actions)} actions but {len(responses)} responses")
-            print(f"  Entities: {step['entities']}")
+                print(f"    {j+1}. Action: {action} -> Response: {response if response else 'Custom Action'}")
+            print(f"  Slots: {step.get('slots', [])}")
+            print(f"  Form: {step.get('form', None)}")
+            print(f"  Entities: {step.get('entities', [])}")
             print(f"  Outgoing Paths: {step.get('next', [])}")
             print(f"  Fallback Target: {step.get('fallback_target')}")
             print()
@@ -302,13 +336,11 @@ def review_and_edit(bot, step_intents):
             return
         elif choice == 'e':
             idx = get_int(f"Enter step number to edit (1-{len(bot['steps'])}): ", 1, len(bot['steps'])) - 1
-            # Reuse collect_step_data for editing
             all_intents = [s['intent'] for s in bot['steps']]
             updated_step = collect_step_data(idx, existing_step=bot['steps'][idx], all_intents=all_intents)
             bot['steps'][idx] = updated_step
-            save_bot_data(bot)  # Save after editing
+            save_bot_data(bot, selected_file)
         elif choice == 'a':
-            # Add a new step
             intent = get_nonempty(f"  New intent name: ")
             if any(s['intent'] == intent for s in bot['steps']):
                 print("⚠️  Intent already exists. Please use a unique intent name.")
@@ -318,7 +350,7 @@ def review_and_edit(bot, step_intents):
             all_intents = [s['intent'] for s in bot['steps']] + [intent]
             step = collect_step_data(i, intent, all_intents=all_intents)
             bot['steps'].append(step)
-            save_bot_data(bot)  # Save after adding
+            save_bot_data(bot, selected_file)
         elif choice == 'r':
             if not bot['steps']:
                 print("No steps to remove.")
@@ -330,7 +362,6 @@ def review_and_edit(bot, step_intents):
             idx = get_int(f"Enter step number to remove (1-{len(bot['steps'])}): ", 1, len(bot['steps'])) - 1
             removed_intent = bot['steps'][idx]['intent']
             bot['steps'].pop(idx)
-            # Update all references in paths and fallbacks
             for step in bot['steps']:
                 if step.get('fallback_target') == idx:
                     step['fallback_target'] = None
@@ -348,7 +379,7 @@ def review_and_edit(bot, step_intents):
                         new_next.append(path)
                     step['next'] = new_next
             print(f"Step '{removed_intent}' removed! Press Enter to continue...")
-            save_bot_data(bot)  # Save after removing
+            save_bot_data(bot, selected_file)
             input()
         elif choice == 'q':
             print("Exiting without saving.")
@@ -357,65 +388,175 @@ def review_and_edit(bot, step_intents):
             print("Invalid option. Try again.")
             input("Press Enter to continue...")
 
-def load_saved_data():
-    """Load saved bot data from file if it exists."""
-    # First check for bot_save.json (our save file)
-    if os.path.exists("bot_save.json"):
+def select_json_file():
+    json_files = [f for f in glob.glob("*.json") if not f.startswith("__")]
+    if not json_files:
+        print("No .json files found in the root directory. Starting fresh.")
+        return None
+    print("\nAvailable .json files in the root directory:")
+    for idx, fname in enumerate(json_files):
+        print(f"  [{idx+1}] {fname}")
+    while True:
+        choice = input(f"Select a file to load as bot config (1-{len(json_files)}) or press Enter to start fresh: ").strip()
+        if not choice:
+            return None
+        if choice.isdigit() and 1 <= int(choice) <= len(json_files):
+            return json_files[int(choice)-1]
+        print("Invalid selection. Try again.")
+
+def load_saved_data(selected_file=None):
+    if selected_file and os.path.exists(selected_file):
         try:
-            with open("bot_save.json", "r") as f:
+            with open(selected_file, "r") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"⚠️  Error loading saved data: {e}")
+            print(f"⚠️  Error loading {selected_file}: {e}")
             return None
-    
-    # Also check for bot_config.json (from bot_json_builder.py)
-    if os.path.exists("bot_config.json"):
-        try:
-            with open("bot_config.json", "r") as f:
-                data = json.load(f)
-                print("📁 Found bot_config.json from bot_json_builder.py")
-                return data
-        except Exception as e:
-            print(f"⚠️  Error loading bot_config.json: {e}")
-            return None
-    
-    # Check for generated_bot_config.json (from this script)
-    if os.path.exists("generated_bot_config.json"):
-        try:
-            with open("generated_bot_config.json", "r") as f:
-                data = json.load(f)
-                print("📁 Found generated_bot_config.json from previous run")
-                return data
-        except Exception as e:
-            print(f"⚠️  Error loading generated_bot_config.json: {e}")
-            return None
-    
     return None
 
-def save_bot_data(bot):
-    """Save bot data to file."""
+def save_bot_data(bot, selected_file):
     try:
-        with open("bot_save.json", "w") as f:
+        filename = selected_file or f"{bot.get('name', 'bot_save').replace(' ', '_')}.json"
+        with open(filename, "w") as f:
             json.dump(bot, f, indent=2)
-        print("💾 Progress saved to bot_save.json")
+        print(f"💾 Progress saved to {filename}")
     except Exception as e:
         print(f"⚠️  Error saving data: {e}")
 
 def save_final_config(bot):
-    """Save final bot configuration to JSON file."""
     try:
-        with open("generated_bot_config.json", "w") as f:
+        bot_name = bot.get("name", "generated_bot").replace(" ", "_")
+        filename = f"{bot_name}_config.json"
+        with open(filename, "w") as f:
             json.dump(bot, f, indent=2)
-        print("💾 Final configuration saved to generated_bot_config.json")
+        print(f"\U0001F4BE Final configuration saved to {filename}")
     except Exception as e:
-        print(f"⚠️  Error saving final configuration: {e}")
+        print(f"\u26A0\uFE0F  Error saving final configuration: {e}")
+
+def generate_actions_py(slots, forms, actions, bot_steps):
+    actions_code = [
+        "from rasa_sdk import Action, Tracker",
+        "from rasa_sdk.executor import CollectingDispatcher",
+        "from rasa_sdk.types import DomainDict",
+        "from rasa_sdk.forms import FormValidationAction",
+        "from rasa_sdk.events import SlotSet, ActiveLoop",
+        "import re",
+        "import requests",
+        "",
+        "# API configuration (replace with your actual API details)",
+        "API_KEY = 'YOUR_API_KEY_HERE'  # Replace with your API key",
+        "API_BASE_URL = 'https://your-api-endpoint.com'  # Replace with your API base URL",
+        "AUTH_ENDPOINT = f'{API_BASE_URL}/auth'  # Endpoint for API authorization",
+        "# Add additional API endpoints as needed for your use case",
+        "",
+        "def authorize_api():",
+        "    try:",
+        "        headers = {'Authorization': f'Bearer {API_KEY}'}",
+        "        response = requests.post(AUTH_ENDPOINT, headers=headers)",
+        "        if response.status_code == 200:",
+        "            return True",
+        "        else:",
+        "            return False",
+        "    except Exception as e:",
+        "        print(f'API authorization error: {e}')",
+        "        return False",
+        ""
+    ]
+
+    # Map slots to their types and entities to their regex patterns
+    slot_types = {slot["name"]: slot["type"] for step in bot_steps for slot in step.get("slots", [])}
+    slot_values = {slot["name"]: slot.get("values", []) for step in bot_steps for slot in step.get("slots", []) if slot["type"] == "categorical"}
+    entity_regex = {entity["name"]: entity["regex_pattern"] for step in bot_steps for entity in step.get("entities", []) if entity.get("regex_pattern")}
+
+    # Generate validation functions for each form
+    for form in forms:
+        form_step = next((step for step in bot_steps if step.get("form", {}).get("name") == form), None)
+        if not form_step:
+            continue
+        required_slots = form_step.get("form", {}).get("required_slots", [])
+
+        actions_code.append(f"def validate_{form}_slot(slot_name, slot_value, dispatcher):")
+        actions_code.append(f"    # Validation logic for {form} slots")
+        actions_code.append(f"    if slot_name not in {required_slots}:")
+        actions_code.append(f"        return None  # Slot not required")
+        actions_code.append(f"    try:")
+        for slot in required_slots:
+            actions_code.append(f"        if slot_name == '{slot}':")
+            if slot in entity_regex:
+                actions_code.append(f"            if slot_value and re.match(r'{entity_regex.get(slot, '')}', str(slot_value)):")
+                actions_code.append(f"                return slot_value")
+                actions_code.append(f"            else:")
+                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid {slot}.')")
+                actions_code.append(f"                return None")
+            elif slot_types.get(slot) == "float":
+                actions_code.append(f"            if slot_value and isinstance(slot_value, (int, float)) and float(slot_value) >= 0:")
+                actions_code.append(f"                return float(slot_value)")
+                actions_code.append(f"            else:")
+                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid number for {slot}.')")
+                actions_code.append(f"                return None")
+            elif slot_types.get(slot) == "categorical":
+                values = slot_values.get(slot, [])
+                actions_code.append(f"            if slot_value in {values}:")
+                actions_code.append(f"                return slot_value")
+                actions_code.append(f"            else:")
+                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid option for {slot} ({', '.join(values)}).')")
+                actions_code.append(f"                return None")
+            else:
+                actions_code.append(f"            if slot_value and isinstance(slot_value, str) and slot_value.strip():")
+                actions_code.append(f"                return slot_value")
+                actions_code.append(f"            else:")
+                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid {slot}.')")
+                actions_code.append(f"                return None")
+        actions_code.append(f"        return None  # Unknown slot")
+        actions_code.append(f"    except Exception as e:")
+        actions_code.append(f"        print(f'Validation error for {{slot_name}}: {{e}}')")
+        actions_code.append(f"        dispatcher.utter_message(text='Error validating {slot}. Please try again.')")
+        actions_code.append(f"        return None")
+        actions_code.append("")
+
+        actions_code.append(f"class Validate{form.capitalize()}(FormValidationAction):")
+        actions_code.append(f"    def name(self) -> str:")
+        actions_code.append(f"        return 'validate_{form}'")
+        actions_code.append("")
+        actions_code.append(f"    async def validate(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> dict:")
+        actions_code.append(f"        slots = {{}}")
+        actions_code.append(f"        for slot in {required_slots}:")
+        actions_code.append(f"            slot_value = tracker.get_slot(slot)")
+        actions_code.append(f"            validated_value = validate_{form}_slot(slot, slot_value, dispatcher)")
+        actions_code.append(f"            slots[slot] = validated_value")
+        actions_code.append(f"        return slots")
+        actions_code.append("")
+
+    for action in actions:
+        if action.startswith("utter_") or action.startswith("validate_"):
+            continue
+        actions_code.append(f"class {action.capitalize()}(Action):")
+        actions_code.append(f"    def name(self) -> str:")
+        actions_code.append(f"        return '{action}'")
+        actions_code.append("")
+        actions_code.append(f"    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> list:")
+        actions_code.append(f"        # Implement {action} logic here")
+        actions_code.append(f"        # Example: Fetch data using API or process tracker slots")
+        if action == "action_authorize_api":
+            actions_code.append(f"        if authorize_api():")
+            actions_code.append(f"            return []")
+            actions_code.append(f"        else:")
+            actions_code.append(f"            dispatcher.utter_message(text='Failed to authorize API. Please try again later.')")
+            actions_code.append(f"            return []")
+        else:
+            actions_code.append(f"        return []")
+        actions_code.append("")
+
+    with open("actions/actions.py", "w") as f:
+        f.write("\n".join(actions_code) + "\n")
 
 def main():
     clear_screen()
     print("\n🎯 Welcome to the Rasa Chatbot Step-by-Step Builder & Generator!\n")
-    
-    # Check for saved data
-    saved_bot = load_saved_data()
+    print("⚠️  You will need to manually edit actions/actions.py to add your API key and endpoints.\n")
+
+    selected_file = select_json_file()
+    saved_bot = load_saved_data(selected_file)
     if saved_bot:
         print("📁 Found saved bot data!")
         print(f"Bot Name: {saved_bot.get('name', 'Unknown')}")
@@ -423,144 +564,93 @@ def main():
         total_steps = saved_bot.get('total_steps', len(saved_bot.get('steps', [])))
         completed_steps = len(saved_bot.get('steps', []))
         print(f"Progress: {completed_steps}/{total_steps} steps completed")
-        
         if "intent_names" in saved_bot:
             print(f"Intent names: {', '.join(saved_bot['intent_names'])}")
-        
-        # Show available files
-        available_files = []
-        if os.path.exists("bot_save.json"):
-            available_files.append("bot_save.json (auto-save)")
-        if os.path.exists("bot_config.json"):
-            available_files.append("bot_config.json (from builder)")
-        if os.path.exists("generated_bot_config.json"):
-            available_files.append("generated_bot_config.json (previous run)")
-        
-        if len(available_files) > 1:
-            print(f"\nAvailable files: {', '.join(available_files)}")
-        
         if get_yes_no("Do you want to continue from saved data?"):
             bot = saved_bot
-            # Use saved intent names if available, otherwise extract from steps
-            if "intent_names" in bot:
-                step_intents = bot["intent_names"]
-                print(f"✅ Loading saved data with {len(step_intents)} intent names...")
-            else:
-                # Fallback: extract from existing steps
-                step_intents = [step['intent'] for step in bot['steps']]
-                print("✅ Loading saved data...")
+            step_intents = bot.get("intent_names", [step['intent'] for step in bot['steps']])
         else:
-            # Clear saved data and start fresh
-            if os.path.exists("bot_save.json"):
-                os.remove("bot_save.json")
-            if os.path.exists("bot_config.json"):
-                os.remove("bot_config.json")
-            if os.path.exists("generated_bot_config.json"):
-                os.remove("generated_bot_config.json")
-            bot = {}
+            bot = {"steps": []}
             step_intents = []
     else:
-        bot = {}
+        bot = {"steps": []}
         step_intents = []
-    
-    # If starting fresh or user chose to start fresh
-    if not bot:
-        bot["name"] = get_nonempty("0) Chatbot Name: ")
-        bot["description"] = get_nonempty("1) Bot Description: ")
-        total_steps = get_int("2) Number of Steps (nodes): ", min_value=1)
-        bot["total_steps"] = total_steps
-        bot["steps"] = []
 
-        # First, collect all intent names
-        print("\nEnter intent names for each step:")
-        for i in range(total_steps):
-            intent = get_nonempty(f"  Intent name for step {i+1}: ")
-            step_intents.append(intent)
-        
-        # Save the intent names in the bot data
-        bot["intent_names"] = step_intents.copy()
-        
-        # Save initial data with all intent names
-        save_bot_data(bot)
-        print(f"💾 Saved initial data: {total_steps} steps with intent names")
+    # Only prompt for these if not already present
+    if "name" not in bot or not bot["name"]:
+        bot["name"] = get_nonempty("Enter bot name: ")
+    if "description" not in bot or not bot["description"]:
+        bot["description"] = get_nonempty("Enter bot description: ")
+    if "total_steps" not in bot or not isinstance(bot["total_steps"], int):
+        bot["total_steps"] = get_int("Enter total number of steps (intents) for your bot: ", min_value=1)
 
-    # Now, for each step, collect the rest of the info
-    total_steps = bot.get("total_steps", len(step_intents))
-    print(f"\n📋 Working on {len(bot['steps'])}/{total_steps} steps completed")
-    
-    for i in range(len(bot["steps"]), total_steps):
-        clear_screen()
-        print(f"\n── Step {i+1} / {total_steps} ──")
-        print(f"Intent: {step_intents[i]}")
-        print(f"Progress: {len(bot['steps'])}/{total_steps} steps completed")
-        print("=" * 50)
-        
-        step = collect_step_data(i, intent=step_intents[i], all_intents=step_intents)
+    # Collect all intent names up front, only if not already present
+    if "intent_names" in bot and isinstance(bot["intent_names"], list) and len(bot["intent_names"]) == bot["total_steps"]:
+        step_intents = bot["intent_names"]
+    else:
+        step_intents = []
+        print(f"\n📝 Enter the names of all {bot['total_steps']} intents for {bot['name']}")
+        for i in range(bot["total_steps"]):
+            while True:
+                intent = get_nonempty(f"  Intent name for step {i+1}: ")
+                if intent in step_intents:
+                    print("⚠️  Intent already exists. Please use a unique intent name.")
+                else:
+                    step_intents.append(intent)
+                    break
+        # Save after all intent names are entered
+        bot["intent_names"] = step_intents
+        save_bot_data(bot, selected_file)
+
+    # Collect step data for each intent
+    bot["steps"] = bot.get("steps", [])
+    for i, intent in enumerate(step_intents):
+        if i < len(bot["steps"]):
+            continue
+        print(f"\nDefining step {i+1}/{bot['total_steps']} (intent: {intent})")
+        step = collect_step_data(i, intent=intent, all_intents=step_intents)
         bot["steps"].append(step)
-        
-        # Save progress after each step
-        save_bot_data(bot)
-        print(f"✅ Step {i+1} completed! ({len(bot['steps'])}/{total_steps} done)")
-    
-    # Save configuration after completing all steps
+        save_bot_data(bot, selected_file)
+
+    review_and_edit(bot, step_intents)
     save_final_config(bot)
 
-    # Review and edit menu
-    review_and_edit(bot, step_intents)
-    
-    # Save final data before generation
-    save_bot_data(bot)
-    save_final_config(bot)  # Save the final configuration
+    mkdir("data")
+    mkdir("actions")
 
-    # Prompt for independent intents to exclude from stories
-    print("\nEnter comma-separated intent names you do NOT want to add as independent stories (leave blank to include all):")
-    exclude_intents = set(x.strip() for x in input().split(",") if x.strip())
-
-    # Build graph and generate files (use in-memory bot["steps"])
-    steps = bot["steps"]
     graph = Graph()
-    for idx, step_data in enumerate(steps):
-        # Handle both old format (action) and new format (actions)
-        actions = step_data.get("actions", [])
-        if not actions and "action" in step_data:
-            actions = [step_data["action"]]
-        
-        # Handle responses - ensure it's always a list
-        responses = step_data.get("responses", [])
-        if not isinstance(responses, list):
-            responses = [responses] if responses else []
-        
+    for idx, step_data in enumerate(bot["steps"]):
         node = Node(
             index=idx,
             intent=step_data["intent"],
-            actions=actions,
-            responses=responses,
+            actions=step_data.get("actions", []),
+            responses=step_data.get("responses", []),
             examples=step_data.get("examples", []),
             entities=step_data.get("entities", []),
+            slots=step_data.get("slots", []),
+            form=step_data.get("form", None),
             fallback_target=step_data.get("fallback_target"),
             use_custom_action=step_data.get("use_custom_action", False)
         )
         graph.add_node(node)
-    for idx, step_data in enumerate(steps):
-        for path in step_data["next"]:
+    for idx, step_data in enumerate(bot["steps"]):
+        for path in step_data.get("next", []):
             graph.add_edge(idx, path["target"]-1, path["trigger_intent"])
 
-    # 3) Make folders
-    mkdir("data")
-    mkdir(os.path.join("actions"))
-
-    # 4) Build domain.yml
     domain = OrderedDict([
         ("version", "3.1"),
         ("intents", []),
         ("entities", []),
-        ("responses", OrderedDict()),
-        ("actions", [])
+        ("slots", OrderedDict()),
+        ("forms", OrderedDict()),
+        ("actions", []),
+        ("responses", OrderedDict())
     ])
 
-    # Collect intents & entities & actions
+    all_slots = set()
+    all_forms = set()
     all_actions = set()
-    for step in steps:
+    for step in bot["steps"]:
         intent = step["intent"]
         if intent not in domain["intents"]:
             domain["intents"].append(intent)
@@ -568,44 +658,80 @@ def main():
             ent_name = ent.get("name") if isinstance(ent, dict) else ent
             if ent_name and ent_name not in domain["entities"]:
                 domain["entities"].append(ent_name)
-        # Add actions to responses or actions list
+        for slot in step.get("slots", []):
+            slot_name = slot["name"]
+            if slot_name not in domain["slots"]:
+                if slot["type"] == "categorical":
+                    domain["slots"][slot_name] = {"type": slot["type"], "influence_conversation": slot["influence_conversation"], "values": slot["values"]}
+                else:
+                    domain["slots"][slot_name] = {"type": slot["type"], "influence_conversation": slot["influence_conversation"]}
+                all_slots.add(slot_name)
+        if step.get("form"):
+            form_name = step["form"]["name"]
+            required_slots = {}
+            for slot in step["form"]["required_slots"]:
+                if slot in domain["entities"]:
+                    required_slots[slot] = [{"type": "from_entity", "entity": slot}]
+                else:
+                    required_slots[slot] = [{"type": "from_text"}]
+            domain["forms"][form_name] = {"required_slots": required_slots}
+            all_forms.add(form_name)
+            all_actions.add(form_name)
+            all_actions.add(f"validate_{form_name}")
         actions = step.get("actions", [])
-        if not actions and "action" in step:
-            actions = [step["action"]]
-        
         responses = step.get("responses", [])
-        if not isinstance(responses, list):
-            responses = [responses] if responses else []
-        
         for i, action in enumerate(actions):
             if action:
-                if action.startswith("utter_"):
-                    resp_text = responses[i] if i < len(responses) else "Default response"
-                    domain["responses"][action] = [{"text": resp_text}]
-                else:
-                    all_actions.add(action)
-    # fallback intent
+                all_actions.add(action)
+                if action.startswith("utter_") and i < len(responses) and responses[i]:
+                    domain["responses"][action] = [{"text": responses[i]}]
     if "nlu_fallback" not in domain["intents"]:
         domain["intents"].append("nlu_fallback")
-    domain["actions"] = list(all_actions)
+    domain["actions"] = sorted(list(all_actions))
     domain["responses"]["utter_default"] = [{"text": "Sorry, I didn't get that. Could you rephrase?"}]
-    if not domain["entities"]: del domain["entities"]
+    if not domain["entities"]:
+        del domain["entities"]
     yaml_dump(domain, "domain.yml")
 
-    # 5) Build data/nlu.yml
     nlu = ["version: \"3.1\"", "nlu:"]
-    seen = set()
-    for step in steps:
+    seen_intents = set()
+    regex_entities = {}
+    lookup_entities = {}
+    for step in bot["steps"]:
         intent = step["intent"]
-        if intent in seen:
-            continue
-        seen.add(intent)
-        nlu.append(f"- intent: {intent}")
+        if intent not in seen_intents:
+            seen_intents.add(intent)
+            nlu.append(f"- intent: {intent}")
+            nlu.append("  examples: |")
+            examples = step.get("examples", [])
+            for ex in examples:
+                nlu.append(f"    - {ex}")
+        for ent in step.get("entities", []):
+            ent_name = ent["name"]
+            if ent.get("use_regex") and ent.get("regex_pattern"):
+                if ent_name not in regex_entities:
+                    regex_entities[ent_name] = ent["regex_pattern"]
+                elif regex_entities[ent_name] != ent["regex_pattern"]:
+                    print(f"Warning: Conflicting regex patterns for entity {ent_name}")
+            if ent.get("use_lookup") and ent.get("lookup_values"):
+                if ent_name not in lookup_entities:
+                    lookup_entities[ent_name] = set(ent["lookup_values"])
+                else:
+                    lookup_entities[ent_name].update(ent["lookup_values"])
+    
+    # Add regex entities
+    for ent_name, regex_pattern in regex_entities.items():
+        nlu.append(f"- regex: {ent_name}")
         nlu.append("  examples: |")
-        examples = step.get("examples", [])
-        for ex in examples:
-            nlu.append(f"    - {ex}")
-    # fallback
+        nlu.append(f"    - {regex_pattern}")
+
+    # Add lookup tables
+    for ent_name, values in lookup_entities.items():
+        nlu.append(f"- lookup: {ent_name}")
+        nlu.append("  examples: |")
+        for val in values:
+            nlu.append(f"    - {val}")
+
     nlu.append("- intent: nlu_fallback")
     nlu.append("  examples: |")
     nlu.append("    - Sorry, can you rephrase that?")
@@ -613,21 +739,16 @@ def main():
     with open("data/nlu.yml", "w") as f:
         f.write("\n".join(nlu) + "\n")
 
-    # 6) Build data/stories.yml
+    exclude_intents = set()
     story_paths = graph.generate_stories(max_depth=10, exclude_intents=exclude_intents)
     stories_yaml = {"version": "3.1", "stories": []}
     for i, s in enumerate(story_paths):
-        # s is a list of dicts: [{"intent": ...}, {"actions": [...]}, ...]
         story_steps = []
         for step in s:
             if "intent" in step:
                 intent_step = {"intent": step["intent"]}
-                # Add entities if present for this intent
-                # Find the node for this intent (by index or by intent name)
-                node = next((n for n in steps if n["intent"] == step["intent"]), None)
+                node = next((n for n in bot["steps"] if n["intent"] == step["intent"]), None)
                 if node and node.get("entities"):
-                    # Only add entities that have a value (if you want to prompt for values, you can)
-                    # For now, just add the entity names with dummy values or leave as empty string
                     intent_entities = []
                     for ent in node["entities"]:
                         ent_name = ent["name"] if isinstance(ent, dict) else ent
@@ -635,39 +756,49 @@ def main():
                     if intent_entities:
                         intent_step["entities"] = intent_entities
                 story_steps.append(intent_step)
-            # Add all actions for this step
-            if "actions" in step:
-                for action in step["actions"]:
-                    if action:
-                        story_steps.append({"action": action})
-            if "action" in step:  # for backward compatibility
+                if node and node.get("form"):
+                    story_steps.append({"action": node["form"]})
+                    story_steps.append({"active_loop": node["form"]})
+                    story_steps.append({"active_loop": None})
+            if "action" in step:
                 story_steps.append({"action": step["action"]})
         stories_yaml["stories"].append({"story": f"story_{i+1}", "steps": story_steps})
     yaml_dump(stories_yaml, "data/stories.yml")
 
-    # Add a blank line after each story in data/stories.yml
     with open("data/stories.yml", "r") as f:
         lines = f.readlines()
-
     new_lines = []
     for line in lines:
         new_lines.append(line)
-        # If a line starts a new story, and it's not the first, add a blank line before it
         if line.strip().startswith("- story:") and len(new_lines) > 1:
             new_lines.insert(-1, "\n")
-
     with open("data/stories.yml", "w") as f:
         f.writelines(new_lines)
 
-    # 7) Build data/rules.yml
     rules = {"version": "3.1", "rules": []}
     rules["rules"].append({
         "rule": "fallback_rule",
         "steps": [{"intent": "nlu_fallback"}, {"action": "action_default_fallback"}]
     })
+    for form in all_forms:
+        rules["rules"].append({
+            "rule": f"Activate {form}",
+            "steps": [
+                {"intent": bot["steps"][0]["intent"]},
+                {"action": form},
+                {"active_loop": form}
+            ]
+        })
+        rules["rules"].append({
+            "rule": f"Submit {form}",
+            "condition": [{"active_loop": form}],
+            "steps": [
+                {"action": form},
+                {"active_loop": None}
+            ]
+        })
     yaml_dump(rules, "data/rules.yml")
 
-    # 8) Build config.yml
     config = OrderedDict([
         ("language", "en"),
         ("pipeline", [
@@ -685,25 +816,24 @@ def main():
              "core_fallback_action_name": "action_default_fallback",
              "enable_fallback_prediction": True},
             {"name": "MemoizationPolicy"},
-            {"name": "TEDPolicy", "max_history": 5, "epochs": 100}
+            {"name": "TEDPolicy", "max_history": 5, "epochs": 100},
+            {"name": "FormPolicy"}
         ])
     ])
     yaml_dump(config, "config.yml")
 
-    # Clean up save file after successful generation
-    if os.path.exists("bot_save.json"):
-        os.remove("bot_save.json")
-        print("🗑️  Cleaned up save file")
+    generate_actions_py(all_slots, all_forms, all_actions, bot["steps"])
 
     print("✅ Rasa project files generated!")
     print("\n📁 Files created:")
-    print("   📄 generated_bot_config.json - Your complete bot configuration")
-    print("   📄 domain.yml - Rasa domain file with intents, entities, responses")
+    print("   📄 <bot_name>_config.json - Your complete bot configuration")
+    print("   📄 domain.yml - Rasa domain file with intents, entities, slots, forms, responses")
     print("   📄 data/nlu.yml - Training data for intents and examples")
     print("   📄 data/stories.yml - Conversation flows and stories")
-    print("   📄 data/rules.yml - Rules for fallback handling")
+    print("   📄 data/rules.yml - Rules for forms and fallback handling")
     print("   📄 config.yml - Rasa pipeline and policy configuration")
-    print("\n💡 You can use generated_bot_config.json to recreate your bot or share it!")
+    print("   📄 actions/actions.py - Custom actions and form validation")
+    print("\n⚠️  Please edit actions/actions.py to add your API key and endpoints.")
 
 if __name__ == "__main__":
     main()
