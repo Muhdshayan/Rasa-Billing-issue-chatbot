@@ -27,12 +27,25 @@ def yaml_dump(data, filename):
             return {k: convert_odict(v) for k, v in obj.items()}
         else:
             return obj
+    # Write YAML with blank lines between top-level sections for clarity
+    yaml_str = yaml.safe_dump(convert_odict(data), sort_keys=False, allow_unicode=True)
+    # Add blank lines between top-level keys
+    lines = yaml_str.split('\n')
+    new_lines = []
+    last_was_section = False
+    for i, line in enumerate(lines):
+        if line and not line.startswith(' '):
+            if new_lines and not new_lines[-1].strip() == '':
+                new_lines.append('')
+            last_was_section = True
+        new_lines.append(line)
+    yaml_str = '\n'.join(new_lines)
     with open(filename, "w") as f:
-        yaml.safe_dump(convert_odict(data), f, sort_keys=False, allow_unicode=True)
+        f.write(yaml_str)
 
 # Node class for node metadata
 class Node:
-    def __init__(self, index, intent, actions, responses, examples, entities, slots=None, form=None, fallback_target=None, use_custom_action=False):
+    def __init__(self, index, intent, actions, responses, examples, entities, slots=None, fallback_target=None, use_custom_action=False):
         self.index = index
         self.intent = intent
         self.actions = actions
@@ -40,7 +53,6 @@ class Node:
         self.examples = examples
         self.entities = entities
         self.slots = slots or []
-        self.form = form
         self.fallback_target = fallback_target
         self.use_custom_action = use_custom_action
 
@@ -87,10 +99,11 @@ class Graph:
                 return
             node = self.nodes[idx]
             path = path + [{"intent": node.intent}]
-            if node.form:
-                path.append({"action": node.form})
-                path.append({"active_loop": node.form})
-                path.append({"active_loop": None})
+            # Remove form logic
+            # if node.form:
+            #     path.append({"action": node.form})
+            #     path.append({"active_loop": node.form})
+            #     path.append({"active_loop": None})
             if node.actions:
                 for action in node.actions:
                     path.append({"action": action})
@@ -114,12 +127,23 @@ class Graph:
             if idx in global_visited or idx in has_incoming:
                 continue
             node = self.nodes[idx]
+            # Remove form logic
+            # if not self.adj_list[idx] and node.intent not in exclude_intents:
+            #     story = [{"intent": node.intent}]
+            #     if node.form:
+            #         story.append({"action": node.form})
+            #         story.append({"active_loop": node.form})
+            #         story.append({"active_loop": None})
+            #     if node.actions:
+            #         for action in node.actions:
+            #             story.append({"action": action})
+            #     stories.append(story)
+            #     global_visited.add(idx)
+            # elif self.adj_list[idx]:
+            #     logger.info(f"Starting DFS for subgraph at node {idx}: intent={node.intent}")
+            #     dfs(idx, [], global_visited, 0)
             if not self.adj_list[idx] and node.intent not in exclude_intents:
                 story = [{"intent": node.intent}]
-                if node.form:
-                    story.append({"action": node.form})
-                    story.append({"active_loop": node.form})
-                    story.append({"active_loop": None})
                 if node.actions:
                     for action in node.actions:
                         story.append({"action": action})
@@ -170,6 +194,7 @@ def gather_entities(step_idx):
     ents = []
     while True:
         name = get_nonempty(f"  • Entity name for step {step_idx}: ")
+        example_value = get_nonempty(f"    ↳ Example value for entity '{name}': ")
         use_lookup = get_yes_no("    ↳ Use lookup table for this entity?")
         lookup_vals = []
         if use_lookup:
@@ -185,6 +210,7 @@ def gather_entities(step_idx):
             regex = get_nonempty("      ↳ Enter regex pattern (e.g., \\d{{10}} for 10-digit phone): ")
         ents.append({
             "name": name,
+            "example": example_value,
             "use_lookup": use_lookup,
             "lookup_values": lookup_vals,
             "use_regex": use_regex,
@@ -195,54 +221,41 @@ def gather_entities(step_idx):
             break
     return ents
 
-def gather_slots(step_idx):
+def gather_slots(step_idx, all_entities):
     slots = []
     while True:
         name = get_nonempty(f"  • Slot name for step {step_idx}: ")
         slot_type = get_nonempty("    ↳ Slot type (e.g., text, float, categorical): ")
         influence_conversation = get_yes_no("    ↳ Should this slot influence the conversation?")
-        if slot_type == "categorical":
-            print("      ↳ Enter possible values for categorical slot (one per line, blank to finish):")
-            values = []
-            while True:
-                val = input("        - ").strip()
-                if not val:
-                    break
-                values.append(val)
-            slots.append({"name": name, "type": slot_type, "influence_conversation": influence_conversation, "values": values})
+        if name in all_entities:
+            mapping = {"type": "from_entity", "entity": name}
         else:
-            slots.append({"name": name, "type": slot_type, "influence_conversation": influence_conversation})
+            mapping = {"type": "custom"}
+        slot = {
+            "name": name,
+            "type": slot_type,
+            "influence_conversation": influence_conversation,
+            "mapping": mapping
+        }
+        slots.append(slot)
         more = get_yes_no("  • Add another slot for this step?")
         if not more:
             break
     return slots
 
-def gather_form(step_idx):
-    if get_yes_no(f"  • Does step {step_idx} use a form?"):
-        form_name = get_nonempty("    ↳ Form name: ")
-        print("    ↳ Enter required slots for this form (one per line, blank to finish):")
-        required_slots = []
-        while True:
-            slot = input("      - Slot name: ").strip()
-            if not slot:
-                break
-            required_slots.append(slot)
-        return {"name": form_name, "required_slots": required_slots}
-    return None
-
-def gather_paths(step_idx, num_paths, all_intents):
-    paths = []
-    for j in range(1, num_paths + 1):
-        print("    ↳ Available steps and their intents:")
-        for idx, intent_name in enumerate(all_intents):
-            print(f"      {idx+1}: {intent_name}")
-        target = get_int(f"    - Path {j}: target step number (1…{len(all_intents)}): ", min_value=1, max_value=len(all_intents))
-        trigger_intent = get_nonempty(f"      Trigger intent for this path: ")
-        while trigger_intent not in all_intents:
-            print("⚠️  Trigger intent must be one of the defined intents.")
-            trigger_intent = get_nonempty(f"      Trigger intent for this path: ")
-        paths.append({"target": target, "trigger_intent": trigger_intent})
-    return paths
+# Remove gather_form and all form-related logic
+# Remove form argument from Node class and its usage
+class Node:
+    def __init__(self, index, intent, actions, responses, examples, entities, slots=None, fallback_target=None, use_custom_action=False):
+        self.index = index
+        self.intent = intent
+        self.actions = actions
+        self.responses = responses
+        self.examples = examples
+        self.entities = entities
+        self.slots = slots or []
+        self.fallback_target = fallback_target
+        self.use_custom_action = use_custom_action
 
 def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
     step = existing_step.copy() if existing_step else {}
@@ -279,10 +292,13 @@ def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
         step['actions'] = actions
         step['responses'] = responses
     if get_yes_no("  c) Does this step use slots?"):
-        step["slots"] = gather_slots(index+1)
+        all_entities = [ent["name"] if isinstance(ent, dict) else ent for ent in step.get("entities", [])]
+        step["slots"] = gather_slots(index+1, all_entities)
     else:
         step["slots"] = []
-    step["form"] = gather_form(index+1)
+    # Remove form prompt
+    # step["form"] = gather_form(index+1)
+    step["form"] = None
     if get_yes_no("  d) Will you define a fallback path for this step?"):
         print("    ↳ Available steps:")
         for idx, name in enumerate(all_intents or []):
@@ -296,10 +312,18 @@ def collect_step_data(index, intent=None, existing_step=None, all_intents=None):
         step["entities"] = []
     num_paths = get_int(f"  f) Number of outgoing paths from step {index+1}: ", min_value=0)
     step["num_outgoing_paths"] = num_paths
-    if num_paths > 0:
-        step["next"] = gather_paths(index+1, num_paths, all_intents or [])
-    else:
-        step["next"] = []
+    step["next"] = []
+    for i in range(num_paths):
+        print("    ↳ Available steps:")
+        for idx, intent_name in enumerate(all_intents):
+            print(f"      {idx+1}: {intent_name}")
+        target = get_int(f"    ↳ Target step index for outgoing path {i+1} (1-{len(all_intents)}): ", min_value=1, max_value=len(all_intents))
+        while True:
+            trigger_intent = get_nonempty(f"    ↳ Trigger intent for outgoing path {i+1} (choose from above): ")
+            if trigger_intent in all_intents:
+                break
+            print("      ⚠️  Please enter a valid intent from the list above.")
+        step["next"].append({"trigger_intent": trigger_intent, "target": target})
     return step
 
 def review_and_edit(bot, step_intents):
@@ -437,118 +461,48 @@ def generate_actions_py(slots, forms, actions, bot_steps):
     actions_code = [
         "from rasa_sdk import Action, Tracker",
         "from rasa_sdk.executor import CollectingDispatcher",
-        "from rasa_sdk.types import DomainDict",
-        "from rasa_sdk.forms import FormValidationAction",
-        "from rasa_sdk.events import SlotSet, ActiveLoop",
+        "from rasa_sdk.events import SlotSet",
+        "from typing import Any, Dict, List, Text",
         "import re",
         "import requests",
+        "import logging",
         "",
-        "# API configuration (replace with your actual API details)",
-        "API_KEY = 'YOUR_API_KEY_HERE'  # Replace with your API key",
-        "API_BASE_URL = 'https://your-api-endpoint.com'  # Replace with your API base URL",
-        "AUTH_ENDPOINT = f'{API_BASE_URL}/auth'  # Endpoint for API authorization",
-        "# Add additional API endpoints as needed for your use case",
-        "",
-        "def authorize_api():",
-        "    try:",
-        "        headers = {'Authorization': f'Bearer {API_KEY}'}",
-        "        response = requests.post(AUTH_ENDPOINT, headers=headers)",
-        "        if response.status_code == 200:",
-        "            return True",
-        "        else:",
-        "            return False",
-        "    except Exception as e:",
-        "        print(f'API authorization error: {e}')",
-        "        return False",
+        "# Setup logging for debugging",
+        "logging.basicConfig(level=logging.DEBUG, format=\"%(asctime)s - %(levelname)s - %(message)s\")",
+        "logger = logging.getLogger(__name__)",
         ""
     ]
-
-    # Map slots to their types and entities to their regex patterns
-    slot_types = {slot["name"]: slot["type"] for step in bot_steps for slot in step.get("slots", [])}
-    slot_values = {slot["name"]: slot.get("values", []) for step in bot_steps for slot in step.get("slots", []) if slot["type"] == "categorical"}
-    entity_regex = {entity["name"]: entity["regex_pattern"] for step in bot_steps for entity in step.get("entities", []) if entity.get("regex_pattern")}
-
-    # Generate validation functions for each form
-    for form in forms:
-        form_step = next((step for step in bot_steps if step.get("form", {}).get("name") == form), None)
-        if not form_step:
-            continue
-        required_slots = form_step.get("form", {}).get("required_slots", [])
-
-        actions_code.append(f"def validate_{form}_slot(slot_name, slot_value, dispatcher):")
-        actions_code.append(f"    # Validation logic for {form} slots")
-        actions_code.append(f"    if slot_name not in {required_slots}:")
-        actions_code.append(f"        return None  # Slot not required")
-        actions_code.append(f"    try:")
-        for slot in required_slots:
-            actions_code.append(f"        if slot_name == '{slot}':")
-            if slot in entity_regex:
-                actions_code.append(f"            if slot_value and re.match(r'{entity_regex.get(slot, '')}', str(slot_value)):")
-                actions_code.append(f"                return slot_value")
-                actions_code.append(f"            else:")
-                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid {slot}.')")
-                actions_code.append(f"                return None")
-            elif slot_types.get(slot) == "float":
-                actions_code.append(f"            if slot_value and isinstance(slot_value, (int, float)) and float(slot_value) >= 0:")
-                actions_code.append(f"                return float(slot_value)")
-                actions_code.append(f"            else:")
-                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid number for {slot}.')")
-                actions_code.append(f"                return None")
-            elif slot_types.get(slot) == "categorical":
-                values = slot_values.get(slot, [])
-                actions_code.append(f"            if slot_value in {values}:")
-                actions_code.append(f"                return slot_value")
-                actions_code.append(f"            else:")
-                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid option for {slot} ({', '.join(values)}).')")
-                actions_code.append(f"                return None")
-            else:
-                actions_code.append(f"            if slot_value and isinstance(slot_value, str) and slot_value.strip():")
-                actions_code.append(f"                return slot_value")
-                actions_code.append(f"            else:")
-                actions_code.append(f"                dispatcher.utter_message(text='Please provide a valid {slot}.')")
-                actions_code.append(f"                return None")
-        actions_code.append(f"        return None  # Unknown slot")
-        actions_code.append(f"    except Exception as e:")
-        actions_code.append(f"        print(f'Validation error for {{slot_name}}: {{e}}')")
-        actions_code.append(f"        dispatcher.utter_message(text='Error validating {slot}. Please try again.')")
-        actions_code.append(f"        return None")
-        actions_code.append("")
-
-        actions_code.append(f"class Validate{form.capitalize()}(FormValidationAction):")
-        actions_code.append(f"    def name(self) -> str:")
-        actions_code.append(f"        return 'validate_{form}'")
-        actions_code.append("")
-        actions_code.append(f"    async def validate(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> dict:")
-        actions_code.append(f"        slots = {{}}")
-        actions_code.append(f"        for slot in {required_slots}:")
-        actions_code.append(f"            slot_value = tracker.get_slot(slot)")
-        actions_code.append(f"            validated_value = validate_{form}_slot(slot, slot_value, dispatcher)")
-        actions_code.append(f"            slots[slot] = validated_value")
-        actions_code.append(f"        return slots")
-        actions_code.append("")
 
     for action in actions:
         if action.startswith("utter_") or action.startswith("validate_"):
             continue
-        actions_code.append(f"class {action.capitalize()}(Action):")
-        actions_code.append(f"    def name(self) -> str:")
-        actions_code.append(f"        return '{action}'")
+        class_name = ''.join([w.capitalize() for w in action.split('_')])
+        actions_code.append(f"class {class_name}(Action):")
+        actions_code.append(f"    def name(self) -> Text:")
+        actions_code.append(f"        return \"{action}\"")
         actions_code.append("")
-        actions_code.append(f"    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> list:")
-        actions_code.append(f"        # Implement {action} logic here")
-        actions_code.append(f"        # Example: Fetch data using API or process tracker slots")
-        if action == "action_authorize_api":
-            actions_code.append(f"        if authorize_api():")
-            actions_code.append(f"            return []")
-            actions_code.append(f"        else:")
-            actions_code.append(f"            dispatcher.utter_message(text='Failed to authorize API. Please try again later.')")
-            actions_code.append(f"            return []")
-        else:
-            actions_code.append(f"        return []")
+        actions_code.append(f"    def run(self, dispatcher: CollectingDispatcher,\n            tracker: Tracker,\n            domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:")
+        actions_code.append(f"        # TODO: Implement logic for {action}")
+        actions_code.append(f"        return []")
         actions_code.append("")
 
     with open("actions/actions.py", "w") as f:
         f.write("\n".join(actions_code) + "\n")
+
+def generate_dummy_nlu_examples(bot, step_intents):
+    print("\n--- Add dummy NLU examples for each intent ---")
+    for i, intent in enumerate(step_intents):
+        step = next((s for s in bot["steps"] if s["intent"] == intent), None)
+        if step is None:
+            continue
+        try:
+            num_variations = int(input(f"How many dummy variations for intent '{intent}'? (enter 0 for none): ").strip())
+        except Exception:
+            num_variations = 0
+        if num_variations > 0:
+            existing = step.get("examples", [])
+            dummy_examples = [f"{intent}{j+1}" for j in range(num_variations)]
+            step["examples"] = existing + dummy_examples
 
 def main():
     clear_screen()
@@ -615,6 +569,9 @@ def main():
     review_and_edit(bot, step_intents)
     save_final_config(bot)
 
+    # Ask for dummy NLU examples and append them
+    generate_dummy_nlu_examples(bot, step_intents)
+
     mkdir("data")
     mkdir("actions")
 
@@ -628,7 +585,6 @@ def main():
             examples=step_data.get("examples", []),
             entities=step_data.get("entities", []),
             slots=step_data.get("slots", []),
-            form=step_data.get("form", None),
             fallback_target=step_data.get("fallback_target"),
             use_custom_action=step_data.get("use_custom_action", False)
         )
@@ -642,7 +598,8 @@ def main():
         ("intents", []),
         ("entities", []),
         ("slots", OrderedDict()),
-        ("forms", OrderedDict()),
+        # Remove forms
+        # ("forms", OrderedDict()),
         ("actions", []),
         ("responses", OrderedDict())
     ])
@@ -650,6 +607,13 @@ def main():
     all_slots = set()
     all_forms = set()
     all_actions = set()
+    # Collect all entity names for mapping
+    all_entity_names = set()
+    for step in bot["steps"]:
+        for ent in step.get("entities", []):
+            ent_name = ent.get("name") if isinstance(ent, dict) else ent
+            if ent_name:
+                all_entity_names.add(ent_name)
     for step in bot["steps"]:
         intent = step["intent"]
         if intent not in domain["intents"]:
@@ -661,23 +625,26 @@ def main():
         for slot in step.get("slots", []):
             slot_name = slot["name"]
             if slot_name not in domain["slots"]:
-                if slot["type"] == "categorical":
-                    domain["slots"][slot_name] = {"type": slot["type"], "influence_conversation": slot["influence_conversation"], "values": slot["values"]}
-                else:
-                    domain["slots"][slot_name] = {"type": slot["type"], "influence_conversation": slot["influence_conversation"]}
+                slot_def = {
+                    "type": slot["type"],
+                    "influence_conversation": slot["influence_conversation"],
+                    "mappings": [slot["mapping"]]
+                }
+                domain["slots"][slot_name] = slot_def
                 all_slots.add(slot_name)
-        if step.get("form"):
-            form_name = step["form"]["name"]
-            required_slots = {}
-            for slot in step["form"]["required_slots"]:
-                if slot in domain["entities"]:
-                    required_slots[slot] = [{"type": "from_entity", "entity": slot}]
-                else:
-                    required_slots[slot] = [{"type": "from_text"}]
-            domain["forms"][form_name] = {"required_slots": required_slots}
-            all_forms.add(form_name)
-            all_actions.add(form_name)
-            all_actions.add(f"validate_{form_name}")
+        # Remove form logic
+        # if step.get("form"):
+        #     form_name = step["form"]["name"]
+        #     required_slots = {}
+        #     for slot in step["form"]["required_slots"]:
+        #         if slot in domain["entities"]:
+        #             required_slots[slot] = [{"type": "from_entity", "entity": slot}]
+        #         else:
+        #             required_slots[slot] = [{"type": "from_text"}]
+        #     domain["forms"][form_name] = {"required_slots": required_slots}
+        #     all_forms.add(form_name)
+        #     all_actions.add(form_name)
+        #     all_actions.add(f"validate_{form_name}")
         actions = step.get("actions", [])
         responses = step.get("responses", [])
         for i, action in enumerate(actions):
@@ -706,6 +673,7 @@ def main():
             examples = step.get("examples", [])
             for ex in examples:
                 nlu.append(f"    - {ex}")
+            nlu.append("")  # Blank line after each intent
         for ent in step.get("entities", []):
             ent_name = ent["name"]
             if ent.get("use_regex") and ent.get("regex_pattern"):
@@ -718,24 +686,24 @@ def main():
                     lookup_entities[ent_name] = set(ent["lookup_values"])
                 else:
                     lookup_entities[ent_name].update(ent["lookup_values"])
-    
     # Add regex entities
     for ent_name, regex_pattern in regex_entities.items():
         nlu.append(f"- regex: {ent_name}")
         nlu.append("  examples: |")
         nlu.append(f"    - {regex_pattern}")
-
+        nlu.append("")  # Blank line after each regex
     # Add lookup tables
     for ent_name, values in lookup_entities.items():
         nlu.append(f"- lookup: {ent_name}")
         nlu.append("  examples: |")
         for val in values:
             nlu.append(f"    - {val}")
-
+        nlu.append("")  # Blank line after each lookup
     nlu.append("- intent: nlu_fallback")
     nlu.append("  examples: |")
     nlu.append("    - Sorry, can you rephrase that?")
     nlu.append("    - I didn't understand.")
+    nlu.append("")
     with open("data/nlu.yml", "w") as f:
         f.write("\n".join(nlu) + "\n")
 
@@ -752,26 +720,27 @@ def main():
                     intent_entities = []
                     for ent in node["entities"]:
                         ent_name = ent["name"] if isinstance(ent, dict) else ent
-                        intent_entities.append({ent_name: ""})
+                        ent_example = ent.get("example") if isinstance(ent, dict) else None
+                        if ent_example:
+                            intent_entities.append({ent_name: ent_example})
+                        else:
+                            intent_entities.append({ent_name: ""})
                     if intent_entities:
                         intent_step["entities"] = intent_entities
                 story_steps.append(intent_step)
-                if node and node.get("form"):
-                    story_steps.append({"action": node["form"]})
-                    story_steps.append({"active_loop": node["form"]})
-                    story_steps.append({"active_loop": None})
             if "action" in step:
+                # Do NOT attach entities to action steps
                 story_steps.append({"action": step["action"]})
         stories_yaml["stories"].append({"story": f"story_{i+1}", "steps": story_steps})
     yaml_dump(stories_yaml, "data/stories.yml")
-
+    # Add blank lines between stories
     with open("data/stories.yml", "r") as f:
         lines = f.readlines()
     new_lines = []
     for line in lines:
         new_lines.append(line)
         if line.strip().startswith("- story:") and len(new_lines) > 1:
-            new_lines.insert(-1, "\n")
+            new_lines.append("\n")
     with open("data/stories.yml", "w") as f:
         f.writelines(new_lines)
 
@@ -780,26 +749,29 @@ def main():
         "rule": "fallback_rule",
         "steps": [{"intent": "nlu_fallback"}, {"action": "action_default_fallback"}]
     })
-    for form in all_forms:
-        rules["rules"].append({
-            "rule": f"Activate {form}",
-            "steps": [
-                {"intent": bot["steps"][0]["intent"]},
-                {"action": form},
-                {"active_loop": form}
-            ]
-        })
-        rules["rules"].append({
-            "rule": f"Submit {form}",
-            "condition": [{"active_loop": form}],
-            "steps": [
-                {"action": form},
-                {"active_loop": None}
-            ]
-        })
+    # Remove form rules
+    # for form in all_forms:
+    #     rules["rules"].append({
+    #         "rule": f"Activate {form}",
+    #         "steps": [
+    #             {"intent": bot["steps"][0]["intent"]},
+    #             {"action": form},
+    #             {"active_loop": form}
+    #         ]
+    #     })
+    #     rules["rules"].append({
+    #         "rule": f"Submit {form}",
+    #         "condition": [{"active_loop": form}],
+    #         "steps": [
+    #             {"action": form},
+    #             {"active_loop": None}
+    #         ]
+    #     })
     yaml_dump(rules, "data/rules.yml")
 
+    # Write config.yml to match Talha files/config.yml
     config = OrderedDict([
+        ("version", "3.1"),
         ("language", "en"),
         ("pipeline", [
             {"name": "WhitespaceTokenizer"},
@@ -807,22 +779,25 @@ def main():
             {"name": "LexicalSyntacticFeaturizer"},
             {"name": "CountVectorsFeaturizer"},
             {"name": "CountVectorsFeaturizer", "analyzer": "char_wb", "min_ngram": 1, "max_ngram": 4},
-            {"name": "DIETClassifier", "epochs": 100},
+            {"name": "DIETClassifier", "epochs": 150},
             {"name": "EntitySynonymMapper"},
             {"name": "ResponseSelector", "epochs": 100}
         ]),
         ("policies", [
-            {"name": "RulePolicy", "core_fallback_threshold": 0.4,
-             "core_fallback_action_name": "action_default_fallback",
-             "enable_fallback_prediction": True},
+            {"name": "RulePolicy", "core_fallback_threshold": 0.2, "core_fallback_action_name": "action_default_fallback", "enable_fallback_prediction": True},
             {"name": "MemoizationPolicy"},
-            {"name": "TEDPolicy", "max_history": 5, "epochs": 100},
-            {"name": "FormPolicy"}
+            {"name": "TEDPolicy", "max_history": 7, "epochs": 150}
         ])
     ])
     yaml_dump(config, "config.yml")
 
     generate_actions_py(all_slots, all_forms, all_actions, bot["steps"])
+
+    # If there are any custom actions, create endpoints.yml
+    has_custom_action = any(a for a in all_actions if not a.startswith("utter_"))
+    if has_custom_action:
+        with open("endpoints.yml", "w") as f:
+            f.write("action_endpoint:\n  url: \"http://localhost:5055/webhook\"\n")
 
     print("✅ Rasa project files generated!")
     print("\n📁 Files created:")
