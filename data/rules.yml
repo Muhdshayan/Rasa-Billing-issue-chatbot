@@ -1,0 +1,46 @@
+version: "3.1"
+
+rules:
+- rule: Activate auth form
+  steps:
+    - intent: authorize
+    - action: auth_form
+    - active_loop: auth_form
+
+- rule: Submit auth form
+  condition:
+    - active_loop: auth_form
+  steps:
+    - action: auth_form
+    - active_loop: null
+    - action: utter_askissue
+
+- rule: Activate phone number form
+  steps:
+    - intent: provide_phone_number
+    - action: phone_number_form
+    - active_loop: phone_number_form
+
+- rule: Submit phone number form
+  condition:
+    - active_loop: phone_number_form
+  steps:
+    - action: phone_number_form
+    - active_loop: null
+    - action: action_check_credit_balance
+
+- rule: Check credit balance after phone validation
+  condition:
+    - slot_was_set:
+        - phone_number
+    - slot_was_set:
+        - customer_id
+    - slot_was_set:
+        - current_question: null  # Only trigger if current_question is not set
+  steps:
+    - action: action_check_credit_balance
+
+- rule: Handle fallback
+  steps:
+    - intent: nlu_fallback
+    - action: utter_default

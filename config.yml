@@ -1,0 +1,32 @@
+version: '3.1'
+
+language: en
+
+pipeline:
+- name: WhitespaceTokenizer
+- name: RegexFeaturizer
+- name: LexicalSyntacticFeaturizer
+- name: CountVectorsFeaturizer
+- name: CountVectorsFeaturizer
+  analyzer: char_wb
+  min_ngram: 1
+  max_ngram: 4
+- name: DIETClassifier
+  epochs: 100
+  intent_classification_threshold: 0.5
+- name: EntitySynonymMapper
+- name: ResponseSelector
+  epochs: 100
+
+policies:
+- name: RulePolicy
+  core_fallback_threshold: 0.4
+  core_fallback_action_name: action_default_fallback
+  enable_fallback_prediction: true
+- name: AugmentedMemoizationPolicy
+  max_history: 10
+- name: TEDPolicy
+  max_history: 10
+  epochs: 100
+
+assistant_id: 20250718-174914-deterministic-basin

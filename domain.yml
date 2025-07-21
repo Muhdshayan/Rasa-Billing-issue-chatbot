@@ -1,0 +1,125 @@
+version: "3.1"
+
+intents:
+  - greet
+  - authorize
+  - billing_issue
+  - provide_phone_number
+  - nlu_fallback
+  - affirm
+  - deny
+  - choose_package
+
+
+entities:
+  - username
+  - password
+  - phone_number
+  - customer_id
+  - credit_balance
+  - package_choice
+
+
+slots:
+  username:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: from_entity
+      entity: username
+      intent: authorize
+  password:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: from_entity
+      entity: password
+      intent: authorize
+  phone_number:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: from_entity
+      entity: phone_number
+      intent: provide_phone_number
+    - type: from_text
+      intent: provide_phone_number
+  auth_token:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
+  credit_balance:
+    type: float
+    influence_conversation: true
+    mappings:
+    - type: custom
+  customer_id:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
+  current_question:
+    type: text
+    influence_conversation: true
+    mappings:
+    - type: custom
+  package_choice:
+    type: text
+    influence_conversation: true
+    mappings:
+    - type: from_entity
+      entity: package_choice
+      intent: choose_package
+
+forms:
+  auth_form:
+    required_slots:
+      - username
+      - password
+  phone_number_form:
+    required_slots:
+      - phone_number
+
+actions:
+  - validate_auth_form
+  - validate_phone_number_form
+  - action_check_credit_balance
+  - action_show_call_history
+  - action_connect_to_representative
+  - action_offer_credit_increase
+  - action_present_packages
+  - action_upgrade_package
+  - action_offer_representative
+
+
+
+
+responses:
+  utter_greet:
+  - text: "Hello! Provide username and password to login"
+  utter_askissue:
+  - text: "What issue are you facing?"
+  utter_ask_for_phone_number:
+  - text: "Can I please have your phone number?"
+  utter_submit:
+  - text: "Thank you! Your number is verified and details are saved."
+  utter_phone_verified:
+  - text: "Phone number verified successfully. Let me check your credit balance."
+  utter_default:
+  - text: "Sorry, I didn't get that. Could you rephrase?"
+  utter_further_assistance:
+  - text: "Let me know if you need further assistance."
+  utter_connect_to_representative:
+  - text: "Let me connect you to a Customer Service Representative."
+  utter_present_packages:
+  - text: "Based on your usage, here are some suitable packages:\nA. VoxEdge package Additional Minutes: +100 Validity: 30 days @ $1.99\nB. VoxEdge package Additional Minutes: +175 Validity: 60 days @ $3.99\nC. VoxEdge package Additional Minutes: +300 Validity: 90 days @ $8.99\nPlease choose A, B, or C."
+  utter_upgrade_confirmation:
+  - text: "Alright, I'll upgrade your package to {package_choice}. You should get a confirmation message shortly."
+  utter_offer_representative:
+  - text: "Would you like to speak to a customer service representative?"
+  
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true

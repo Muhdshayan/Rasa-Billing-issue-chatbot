@@ -1,0 +1,356 @@
+version: "3.1"
+
+stories:
+
+- story: greetings
+  steps:
+  - intent: greet
+  - action: utter_greet
+
+- story: authentication and billing issue flow
+  steps:
+  - intent: authorize
+    entities:
+    - username: mminds
+    - password: mm123
+  - action: auth_form
+  - active_loop: auth_form
+  - action: auth_form
+  - active_loop: null
+  - slot_was_set:
+    - auth_token: "some_token"
+  - action: utter_askissue
+
+- story: credit zero and affirm
+  steps:
+  - intent: billing_issue
+  - action: utter_ask_for_phone_number
+  - intent: provide_phone_number
+    entities:
+    - phone_number: "03001234567"
+  - action: phone_number_form
+  - active_loop: phone_number_form
+  - action: phone_number_form
+  - active_loop: null
+  - slot_was_set:
+    - phone_number: "03001234567"
+    - customer_id: "some_customer_id"
+    - credit_balance: 0.0
+  - action: action_check_credit_balance
+
+
+
+- story: handle affirm for still_unable
+  steps:
+  - action: action_check_credit_balance
+  - slot_was_set:
+    - credit_balance: 100.0
+    - current_question: "still_unable"
+  - intent: affirm
+  - action: action_connect_to_representative
+
+- story: handle deny for still_unable
+  steps:
+  - action: action_check_credit_balance
+  - slot_was_set:
+    - credit_balance: 100.0
+    - current_question: "still_unable"
+  - intent: deny
+  - action: utter_further_assistance
+
+
+- story: handle affirm for show_call_history
+  steps:
+  - action: action_check_credit_balance
+  - slot_was_set:
+    - credit_balance: 0.0
+    - current_question: "show_call_history"
+  - intent: affirm
+  - action: action_show_call_history  
+  - action: action_offer_credit_increase
+
+  
+
+- story: handle deny for show_call_history
+  steps:
+  - action: action_check_credit_balance
+  - slot_was_set:
+    - credit_balance: 0.0
+    - current_question: "show_call_history"
+  - intent: deny
+  - action: action_offer_credit_increase
+
+
+
+- story: handle decrease credit limit then affirm representative
+  steps:
+  - action: action_offer_credit_increase
+  - slot_was_set:
+    - current_question: "increase_credit"
+  - intent: deny
+  - action: action_offer_representative
+  - slot_was_set:
+    - current_question: "speak_to_representative"
+  - intent: affirm
+  - action: action_connect_to_representative
+  - action: utter_further_assistance
+  
+
+- story: handle decrease credit limit then deny representative
+  steps:
+  - action: action_offer_credit_increase
+  - slot_was_set:
+    - current_question: "increase_credit"
+  - intent: deny
+  - action: action_offer_representative
+  - slot_was_set:
+    - current_question: "speak_to_representative"
+  - intent: deny
+  - action: utter_further_assistance
+
+
+
+- story: increase credit and afirm
+  steps:
+  - action: action_offer_credit_increase
+  - slot_was_set:
+    - current_question: "increase_credit"
+  - intent: affirm
+  - action: action_present_packages
+  - slot_was_set:
+    - current_question: "choose_package"
+  - intent: choose_package
+    entities:
+    - package_choice: "A"
+  - action: action_upgrade_package
+  - intent: thank_you
+  - action: utter_further_assistance
+
+
+- story: handle thank you after upgrade
+  steps:
+  - action: action_upgrade_package
+  - intent: thank_you
+  - action: utter_further_assistance
+# - story: authentication with separate inputs
+#   steps:
+#   - intent: greet
+#   - action: utter_greet
+#   - intent: authorize
+#   - action: auth_form
+#   - active_loop: auth_form
+#   - action: utter_ask_username
+#   - intent: provide_username
+#     entities:
+#     - username: mminds
+#   - action: auth_form
+#   - action: utter_ask_password
+#   - intent: provide_password
+#     entities:
+#     - password: mm123
+#   - action: auth_form
+#   - active_loop: null
+#   - slot_was_set:
+#     - auth_token: "some_token"
+#   - action: utter_askissue
+#   - intent: billing_issue
+#   - action: utter_ask_for_phone_number
+#   - intent: provide_phone_number
+#   - action: phone_number_form
+#   - active_loop: phone_number_form
+#   - action: phone_number_form
+#   - active_loop: null
+#   - action: action_check_credit_balance
+  # - slot_was_set:
+    # - credit_balance: 0.0
+    # - current_question: "show_call_history"
+  # - intent: affirm_call_history
+  # - action: action_show_call_history
+  # - action: utter_offer_credit_increase
+  # - intent: affirm_credit_increase
+  # - action: utter_present_packages
+  # - intent: choose_package
+  #   entities:
+  #   - package_choice: B
+  # - action: action_upgrade_package
+  # - action: utter_confirmation
+  # - intent: thank_you
+  # - action: utter_offer_assistance
+
+# - story: credit zero, no call history, upgrade package
+#   steps:
+#   - intent: greet
+#   - action: utter_greet
+#   - intent: authorize
+#     entities:
+#     - username: mminds
+#     - password: mm123
+#   - action: action_authorize
+#   - slot_was_set:
+#     - auth_token: "some_token"
+#   - action: utter_askissue
+#   - intent: billing_issue
+#   - action: utter_ask_for_phone_number
+#   - action: phone_number_form
+#   - action: action_check_credit_balance
+#   - slot_was_set:
+#     - credit_balance: 0.0
+#     - current_question: "show_call_history"
+#   - intent: deny_call_history
+#   - action: utter_offer_credit_increase
+#   - intent: affirm_credit_increase
+#   - action: utter_present_packages
+#   - intent: choose_package
+#     entities:
+#     - package_choice: B
+#   - action: action_upgrade_package
+#   - action: utter_confirmation
+#   - intent: thank_you
+#   - action: utter_offer_assistance
+
+# - story: credit zero, no call history, representative
+#   steps:
+#   - intent: greet
+#   - action: utter_greet
+#   - intent: authorize
+#     entities:
+#     - username: mminds
+#     - password: mm123
+#   - action: action_authorize
+#   - slot_was_set:
+#     - auth_token: "some_token"
+#   - action: utter_askissue
+#   - intent: billing_issue
+#   - action: utter_ask_for_phone_number
+#   - action: phone_number_form
+#   - action: action_check_credit_balance
+#   - slot_was_set:
+#     - credit_balance: 0.0
+#     - current_question: "show_call_history"
+#   - intent: deny_call_history
+#   - action: utter_offer_credit_increase
+#   - intent: deny_credit_increase
+#   - action: utter_offer_representative
+#   - intent: affirm_representative
+#   - action: action_connect_to_representative
+
+# - story: credit zero, no call history, no representative
+#   steps:
+#   - intent: greet
+#   - action: utter_greet
+#   - intent: authorize
+#     entities:
+#     - username: mminds
+#     - password: mm123
+#   - action: action_authorize
+#   - slot_was_set:
+#     - auth_token: "some_token"
+#   - action: utter_askissue
+#   - intent: billing_issue
+#   - action: utter_ask_for_phone_number
+#   - action: phone_number_form
+#   - action: action_check_credit_balance
+#   - slot_was_set:
+#     - credit_balance: 0.0
+#     - current_question: "show_call_history"
+#   - intent: deny_call_history
+#   - action: utter_offer_credit_increase
+#   - intent: deny_credit_increase
+#   - action: utter_offer_representative
+#   - intent: deny_representative
+#   - action: utter_offer_assistance
+
+# - story: credit non-zero, still unable
+#   steps:
+#   - intent: greet
+#   - action: utter_greet
+#   - intent: authorize
+#     entities:
+#     - username: mminds
+#     - password: mm123
+#   - action: action_authorize
+#   - slot_was_set:
+#     - auth_token: "some_token"
+#   - action: utter_askissue
+#   - intent: billing_issue
+#   - action: utter_ask_for_phone_number
+#   - action: phone_number_form
+#   - action: action_check_credit_balance
+#   - slot_was_set:
+#     - credit_balance: 100.0
+#     - current_question: "still_unable"
+#   - intent: affirm_still_unable
+#   - action: action_connect_to_representative
+
+# - story: credit non-zero, calls working
+#   steps:
+#   - intent: greet
+#   - action: utter_greet
+#   - intent: authorize
+#     entities:
+#     - username: mminds
+#     - password: mm123
+#   - action: action_authorize
+#   - slot_was_set:
+#     - auth_token: "some_token"
+#   - action: utter_askissue
+#   - intent: billing_issue
+#   - action: utter_ask_for_phone_number
+#   - action: phone_number_form
+#   - action: action_check_credit_balance
+#   - slot_was_set:
+#     - credit_balance: 100.0
+#     - current_question: "still_unable"
+#   - intent: deny_still_unable
+#   - action: utter_offer_assistance
+# - story: interactive_story_1
+#   steps:
+#   - intent: greet
+#   - action: utter_greet
+#   - intent: authorize
+#     entities:
+#     - username: mminds
+#     - password: mm123
+#   - slot_was_set:
+#     - username: mminds
+#   - slot_was_set:
+#     - password: mm123
+#   - action: auth_form
+#   - active_loop: auth_form
+#   - slot_was_set:
+#     - username: mminds
+#   - slot_was_set:
+#     - password: mm123
+#   - slot_was_set:
+#     - auth_token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtbWluZHMiLCJpYXQiOjE3NTI5NDU1ODEsImV4cCI6MTc1MzAzMTk4MX0.4Y_6uI2rTaUKUy1K4xDRn-H1LvTmHaQme8C7MXzJc1w
+#   - slot_was_set:
+#     - requested_slot: null
+#   - active_loop: null
+#   - action: utter_askissue
+#   - intent: billing_issue
+#   - action: utter_ask_for_phone_number
+#   - action: phone_number_form
+#   - active_loop: phone_number_form
+#   - slot_was_set:
+#     - requested_slot: phone_number
+#   - intent: provide_phone_number
+#     entities:
+#     - phone_number: '03007654123'
+#   - slot_was_set:
+#     - phone_number: '03007654123'
+#   - action: phone_number_form
+#   - slot_was_set:
+#     - phone_number: '03007654123'
+#   - slot_was_set:
+#     - customer_id: 5
+#   - slot_was_set:
+#     - credit_balance: 40
+#   - slot_was_set:
+#     - requested_slot: null
+#   - active_loop: null
+#   - action: action_check_credit_balance
+#   - slot_was_set:
+#     - credit_balance: 40.0
+#   - slot_was_set:
+#     - current_question: still_unable
+

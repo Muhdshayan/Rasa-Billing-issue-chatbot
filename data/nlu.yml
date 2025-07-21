@@ -1,0 +1,160 @@
+version: "3.1"
+nlu:
+- intent: greet
+  examples: |
+    - hello
+    - hi
+    - hey
+    - hey there
+    - hi there
+    - good morning
+    - good afternoon
+    - good evening
+    - what's up
+    - yo
+    - howdy
+    - greetings
+    - hey buddy
+    - hey bot
+    - hi bot
+    - hello assistant
+    - hi, how are you?
+    - hello, anyone there?
+    - hi, I need help
+    - hello, I have a question
+
+- intent: authorize
+  examples: |
+    - my username is [mminds](username) and password is [mm123](password)
+    - please log me in, I’m [johndoe](username) and the password is [jd9876](password)
+    - authorize me with [ali_007](username) and [p@ss007](password)
+    - here’s my login: [nuser](username) [npass](password)
+    - sign in as [admin001](username), password [adminpass](password)
+    - login with username [skywalker](username) and password [force123](password)
+    - let me in using [user123](username) and [pass123](password)
+    - credentials are [mike89](username) and [secureme](password)
+    - I am [lara88](username) and my password is [laraPwd](password)
+    - you can log me in with [test_user](username) and [test_pass](password)
+    - use [neo](username) as username and [matrix42](password) as password
+    - try [tony_stark](username) with [ironman](password)
+    - here’s my username: [betty321](username), password: [green789](password)
+    - [jeffB](username) and [amzpass](password) are my credentials
+    - authorize with username [python_dev](username), password [code@123](password)
+    - sign me in - [fastUser](username), [fastPass](password)
+    - I’m [student01](username) and password is [pass2025](password)
+    - log me in as [gamer_king](username), password [pro1234](password)
+    - access my account - [zen_user](username), [relax&go](password)
+    - please authenticate [rasa_bot](username) with [chat@ai](password)
+    - login attempt: [rick_grimes](username), [carl!123](password)
+    - user: [root](username), pass: [admin@123](password)
+    - [khalid44](username) / [powerup](password)
+    - [xuser99](username) wants to login with [xsecure](password)
+    - I need to sign in. Username: [nightowl](username), Password: [nocturne](password)
+    - [mminds](username) and [mm123](password)
+
+- intent: billing_issue
+  examples: |
+    - I'm unable to make calls, is there a billing issue?
+    - I can't make any calls, is it because of billing?
+    - Why am I unable to make calls? Is it a billing problem?
+    - billing issue
+    - billing problem
+    - I think there’s something wrong with my bill
+    - Can you check my billing status?
+    - I got overcharged this month
+    - My bill doesn’t seem right
+    - I received a high bill
+    - My balance is fine but I can't make calls
+    - Is my service blocked due to billing?
+    - Any issue with my current billing cycle?
+    - Can you explain the recent charges on my account?
+    - I didn’t make these calls but they’re on my bill
+    - Why is my account suspended?
+    - I was charged extra this time
+    - The billing seems incorrect
+    - There's an error in my monthly charges
+    - I have a complaint about my billing
+    - I don’t understand my last bill
+    - Something’s wrong with the amount charged
+    - Is there a late fee on my account?
+    - Billing isn't accurate this time
+    - Please look into my bill
+- intent: provide_phone_number
+  examples: |
+    - My phone number is [03001234567](phone_number)
+    - It's [03451234567](phone_number)
+    - You can reach me at [03219876543](phone_number)
+    - Here is my number: [03111234567](phone_number)
+    - Contact me on [03007654321](phone_number)
+    - [03457654321](phone_number)
+    - Phone: [03331234567](phone_number)
+    - My number is [03217654321](phone_number)
+    - Sure, it's [03009876543](phone_number)
+    - Yes, the number is [03006543210](phone_number)
+    - [03107654321](phone_number) is my number
+    - I use [03451239876](phone_number)
+    - [03339876543](phone_number)
+    - That's [03012345678](phone_number)
+    - Reach out at [03211234567](phone_number)
+    - It's [03449876543](phone_number)
+    - I have [03005678901](phone_number)
+    - Here you go: [03337654321](phone_number)
+    - My sim is registered on [03004561234](phone_number)
+    - I'm using [03216549876](phone_number)
+    - [03007654123](phone_number)
+- intent: nlu_fallback
+  examples: |
+    - Sorry, can you rephrase that?
+    - I didn't understand.
+- regex: phone_number
+  examples: |
+    - \d{10,12}
+
+
+- intent: affirm
+  examples: |
+    - yes
+    - yeah
+    - sure
+    - okay
+    - alright
+    - definitely
+    - yes please
+    - yup
+- intent: deny
+  examples: |
+    - no
+    - nope
+    - not really
+    - no thanks
+    - nah
+    - never
+    - no way
+
+
+- intent: choose_package
+  examples: |
+    - I'll upgrade to [A](package_choice)
+    - I want package [B](package_choice)
+    - Choose [C](package_choice)
+    - Let's go with [A](package_choice)
+    - Select package [B](package_choice)
+    - I'll take [C](package_choice)
+    - Upgrade to [A](package_choice)
+    - Package [B](package_choice), please
+    - I choose [C](package_choice)
+    - Give me package [A](package_choice
+
+
+- intent: thank_you
+  examples: |
+    - Thanks
+    - Thank you
+    - Thanks a lot
+    - Appreciate it
+    - Thank you so much
+    - Great, thanks
+    - Thanks for the help
+    - Thank you very much
+    - Cheers
+    - Much appreciated
