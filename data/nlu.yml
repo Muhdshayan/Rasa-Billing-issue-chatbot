@@ -22,6 +22,7 @@ nlu:
     - hello, anyone there?
     - hi, I need help
     - hello, I have a question
+    - Hey, How are you?
 
 - intent: authorize
   examples: |
@@ -79,6 +80,17 @@ nlu:
     - Is there a late fee on my account?
     - Billing isn't accurate this time
     - Please look into my bill
+    - My phone stopped working, and I suspect it’s because of an unpaid amount.
+    - I tried calling someone, but my account seems restricted for some reason.
+    - The charges this month are much higher than my usual usage.
+    - I got a message saying my service is on hold, can you check why?
+    - My data isn’t connecting, and I think it might be related to my account status.
+    - I was charged for calls I didn’t make last week.
+    - My account balance looks okay, but I can’t send texts or make calls.
+    - I noticed some unexpected fees on my recent statement.
+    - My plan isn’t working, and I’m wondering if it’s due to a payment issue.
+    - My service was cut off suddenly, can you see if it’s an account problem?
+
 - intent: provide_phone_number
   examples: |
     - My phone number is [03001234567](phone_number)
@@ -102,14 +114,36 @@ nlu:
     - My sim is registered on [03004561234](phone_number)
     - I'm using [03216549876](phone_number)
     - [03007654123](phone_number)
+    - The number for my account is [03123456789](phone_number).
+    - My plan is registered under [03456789012](phone_number).
+    - You can check my details with [03234567890](phone_number).
+    - For this issue, use [03098765432](phone_number) to look up my account.
+    - My SIM is tied to [03312345678](phone_number).
+    - Check my account using [03187654321](phone_number).
+    - The phone I’m referring to is [03487654321](phone_number).
+    - My account is linked to [03054321987](phone_number).
+    - You need my contact? It’s [03267890123](phone_number).
+    - Use [03398765432](phone_number) to verify my plan.
+
+
 - intent: nlu_fallback
   examples: |
     - Sorry, can you rephrase that?
     - I didn't understand.
+    - I’m not sure what you’re asking, can you say it another way?
+    - Could you repeat that? It’s not making sense to me.
+    - I don’t follow what you mean, can you clarify?
+    - That’s a bit confusing, could you explain it differently?
+    - I’m lost, can you phrase that another way?
+    - Sorry, I don’t get it, could you restate that?
+    - What you said didn’t click, can you try again?
+    - I’m not catching your meaning, can you reword it?
+    - That went over my head, could you say it again?
+    - I don’t understand the question, can you make it clearer?
+
 - regex: phone_number
   examples: |
     - \d{10,12}
-
 
 - intent: affirm
   examples: |
@@ -121,6 +155,19 @@ nlu:
     - definitely
     - yes please
     - yup
+    - yes i m still having problem
+    - yes i m still having trouble
+    - yes i m still having trouble making calls
+    - yes i want to increase credit limit
+    - yes i want to add more data
+    - yes i want to add more minutes
+    - yes i want to add more texts
+    - yes i want to add more calls
+    - yes i want to add more credit
+    - yes i want to add more credit limit
+    - yes i want to add more credit limit
+    - yes I want to give my name
+
 - intent: deny
   examples: |
     - no
@@ -130,6 +177,15 @@ nlu:
     - nah
     - never
     - no way
+    - no thanks
+    - no I dont want to talk to a representative
+    - no I dont want to upgrade my package
+    - no I dont want to change my plan
+    - no I dont want to add more data
+    - no I dont want to add more minutes  
+    - no I dont want to add more texts
+    - no I dont want to add more calls
+    - no I dont want to give my name
 
 
 - intent: choose_package
@@ -143,8 +199,55 @@ nlu:
     - Upgrade to [A](package_choice)
     - Package [B](package_choice), please
     - I choose [C](package_choice)
-    - Give me package [A](package_choice
-
+    - Give me package [A](package_choice)
+    - I’d like to switch to the plan labeled [A](package_choice) for more data.
+    - Can you set me up with [B](package_choice) since it has better call rates?
+    - I’m interested in [C](package_choice) because it includes unlimited texts.
+    - Please activate [A](package_choice) for my account starting today.
+    - I’d prefer [B](package_choice) as it suits my usage needs better.
+    - Can you change my plan to [C](package_choice) for the extra benefits?
+    - I want to upgrade to [A](package_choice) to get more monthly data.
+    - Please enroll me in [B](package_choice) for the international calling option.
+    - I’d like to go with [C](package_choice) since it’s more cost-effective.
+    - Switch my account to [A](package_choice) for the added features.
+    - [A](package_choice)
+    - [B](package_choice)
+    - [C](package_choice)
+    - I want to subscribe to [A](package_choice)
+    - I’m going with [A](package_choice)
+    - Let’s activate [B](package_choice)
+    - Sign me up for [C](package_choice)
+    - I’d like to get [A](package_choice)
+    - Please move me to [B](package_choice)
+    - I want to switch to [C](package_choice)
+    - Can you help me activate [A](package_choice)?
+    - Set my plan to [B](package_choice)
+    - Move me over to [C](package_choice)
+    - I need [A](package_choice)
+    - Just give me [B](package_choice)
+    - I think [C](package_choice) is the best fit for me
+    - Activate the [A](package_choice) package for me
+    - Please change my current package to [B](package_choice)
+    - I want to go with [C](package_choice) now
+    - Kindly update my subscription to [A](package_choice)
+    - Go ahead with [B](package_choice), thanks
+    - I’m switching to [C](package_choice)
+    - [A](package_choice), that’s the one I need
+    - Please pick [B](package_choice) for me
+    - Make it [C](package_choice), please
+    - I’d like the [A](package_choice) plan
+    - Can you apply [B](package_choice) to my number?
+    - Let's move forward with [C](package_choice)
+    - I think I'll stick with [A](package_choice)
+    - Change to [B](package_choice), I like that one better
+    - My choice is [C](package_choice)
+    - I want to go with [A](package_choice)
+    - I’m going with [B](package_choice)
+    - I’d like to get [C](package_choice)
+    - Please move me to [A](package_choice)
+    - I want to switch to [B](package_choice)
+    - Can you help me activate [C](package_choice)?
+    - Set my plan to [A](package_choice)
 
 - intent: thank_you
   examples: |
@@ -158,3 +261,90 @@ nlu:
     - Thank you very much
     - Cheers
     - Much appreciated
+    - Really appreciate it!
+    - I’m grateful, thanks!
+    - Appreciate your support.
+    - Huge thanks!
+    - Many thanks for your help.
+    - Thanks for being helpful.
+    - I can’t thank you enough!
+    - That was helpful, thank you.
+    - You’ve been a great help!
+    - Grateful, thank you!
+    - I truly appreciate it.
+    - You saved my day, thanks!
+    - That means a lot, thanks!
+    - I owe you one, thanks!
+    - A big thank you!
+    - Lovely, thanks!
+    - Much obliged.
+    - That’s kind of you, thanks!
+    - Sweet, thank you!
+    - I appreciate that a lot.
+
+- intent: request_representative
+  examples: |
+    - I want to talk to a customer representative
+    - Can I speak to a human?
+    - Connect me to a representative
+    - I need to talk to customer support
+    - I want to talk to an agent
+    - Let me talk to a real person
+    - I want to speak with a representative
+    - Can you connect me to customer service?
+    - I want to talk to a person
+    - I need to speak to someone
+    - Customer representative
+    - Customer support
+    - Customer service
+    - Customer care
+    - Customer assistance
+    - Customer help
+    - Customer assistance
+
+- intent: provide_name
+  examples: |
+    - My name is [Shayan](name)
+    - I am [Ali](name)
+    - Call me [Sara](name)
+    - It's [Ahmed](name)
+    - You can call me [Fatima](name)
+    - [Bilal](name) is my name
+    - My name's [Ayesha](name)
+    - [Usman](name)
+    - I go by [Hira](name)
+    - Please call me [Zain](name)
+    - [Talal](name)
+    - [Shayan](name)
+    - My name is [Haris](name)
+    - I’m known as [Adeel](name)
+    - People call me [Kiran](name)
+    - You can save my name as [Nida](name)
+    - The name’s [Danish](name)
+    - Everyone calls me [Faisal](name)
+    - Just [Anaya](name) is fine
+    - I go by the name [Zoya](name)
+    - You can refer to me as [Omar](name)
+    - I prefer to be called [Yusra](name)
+    - My full name is [Abdul Rehman](name)
+    - I'm [Zainab](name), by the way
+    - You can address me as [Sami](name)
+    - I'm [Saad](name), nice to meet you
+    - You can call me [Laiba](name)
+    - Hello, I'm [Imran](name)
+    - The name is [Iqra](name)
+    - [Nashit](name), that's my name
+    - Hey, it's [Aiman](name)
+    - [Jawad](name) here
+    - [Tania](name) speaking
+    - You may call me [Zubair](name)
+    - I'm [Mahnoor](name) if you need my name
+    - I’m [Hamza](name), by the way
+    - The name I use is [Rubina](name)
+    - I like being called [Fahad](name)
+    - My parents named me [Mehwish](name)
+    - In case you need it, it’s [Hassan](name)
+    - The name I go by is [Mariam](name)
+    - That would be [Noman](name)
+    - [Talal](name)
+

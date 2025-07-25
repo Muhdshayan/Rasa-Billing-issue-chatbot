@@ -2,13 +2,16 @@ version: "3.1"
 
 intents:
   - greet
-  - authorize
+  - provide_name
+#  - authorize
   - billing_issue
   - provide_phone_number
   - nlu_fallback
   - affirm
   - deny
+  - request_representative
   - choose_package
+  - thank_you
 
 
 entities:
@@ -18,6 +21,7 @@ entities:
   - customer_id
   - credit_balance
   - package_choice
+  - name
 
 
 slots:
@@ -25,16 +29,12 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_entity
-      entity: username
-      intent: authorize
+    - type: custom
   password:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_entity
-      entity: password
-      intent: authorize
+    - type: custom
   phone_number:
     type: text
     influence_conversation: false
@@ -71,18 +71,29 @@ slots:
     - type: from_entity
       entity: package_choice
       intent: choose_package
+  name:
+    type: text
+    influence_conversation: true
+    initial_value: ""
+    mappings:
+    - type: from_entity
+      entity: name
+      intent: provide_name
 
+
+# forms:
+#   auth_form:
+#     required_slots:
+#       - username
+#       - password
 forms:
-  auth_form:
-    required_slots:
-      - username
-      - password
   phone_number_form:
     required_slots:
       - phone_number
+# Authentication is now handled in the phone number form and is hardcoded.
 
 actions:
-  - validate_auth_form
+#  - validate_auth_form
   - validate_phone_number_form
   - action_check_credit_balance
   - action_show_call_history
@@ -94,31 +105,56 @@ actions:
 
 
 
-
 responses:
-  utter_greet:
-  - text: "Hello! Provide username and password to login"
-  utter_askissue:
-  - text: "What issue are you facing?"
-  utter_ask_for_phone_number:
-  - text: "Can I please have your phone number?"
-  utter_submit:
-  - text: "Thank you! Your number is verified and details are saved."
-  utter_phone_verified:
-  - text: "Phone number verified successfully. Let me check your credit balance."
-  utter_default:
-  - text: "Sorry, I didn't get that. Could you rephrase?"
-  utter_further_assistance:
-  - text: "Let me know if you need further assistance."
-  utter_connect_to_representative:
-  - text: "Let me connect you to a Customer Service Representative."
-  utter_present_packages:
-  - text: "Based on your usage, here are some suitable packages:\nA. VoxEdge package Additional Minutes: +100 Validity: 30 days @ $1.99\nB. VoxEdge package Additional Minutes: +175 Validity: 60 days @ $3.99\nC. VoxEdge package Additional Minutes: +300 Validity: 90 days @ $8.99\nPlease choose A, B, or C."
-  utter_upgrade_confirmation:
-  - text: "Alright, I'll upgrade your package to {package_choice}. You should get a confirmation message shortly."
-  utter_offer_representative:
-  - text: "Would you like to speak to a customer service representative?"
+  # utter_checking:
+  # - text: "Checking..."
+
+
+  utter_ask_for_name:
+    - text: "Hi there! Would you like to share your name so I can assist you better?"
   
+  utter_ask_name:
+    - text: "May I have your name, please?"
+
+  utter_askissue:
+    - text: "Hey {name}, What issue are you facing? Or would you like me to connect you to a Customer Service Representative?"
+
+  utter_ask_for_phone_number:
+    - text: "{name} May I have your phone number to proceed with your request?"
+
+  utter_submit:
+    - text: "Thank you {name}. Your number has been verified and your details are saved."
+
+  utter_phone_verified:
+    - text: "Your phone number has been successfully verified. Let me check your credit balance now."
+
+  utter_default:
+    - text: "I'm sorry {name}, I didn’t understand that. Could you please rephrase?"
+
+  utter_further_assistance:
+    - text: "Is there anything else I can help you with ?"
+
+  utter_connect_to_representative:
+    - text: "I’ll connect you to a Customer Service Representative shortly."
+
+  utter_present_packages:
+    - text: |
+        Based on your usage, here are some package options you may find suitable:
+
+        A. VoxEdge — Additional Minutes: 100 | Validity: 30 days | $1.99  
+        B. VoxEdge — Additional Minutes: 175 | Validity: 60 days | $3.99  
+        C. VoxEdge — Additional Minutes: 300 | Validity: 90 days | $8.99  
+
+        Please respond with A, B, or C to choose your preferred package.
+
+  utter_upgrade_confirmation:
+    - text: "Understood. I’ll upgrade your package to {package_choice}. You will receive a confirmation message shortly."
+
+  utter_offer_representative:
+    - text: "{name} Would you like to speak with a Customer Service Representative?"
+
+  utter_thanks:
+    - text: "Thank you for using VoxEdge. Have a great day!"
 
 session_config:
   session_expiration_time: 60

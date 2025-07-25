@@ -1,26 +1,25 @@
 version: "3.1"
+# rules:
+# - rule: Activate auth form
+#   steps:
+#     - intent: authorize
+#     - action: auth_form
+#     - active_loop: auth_form
 
+# - rule: Submit auth form
+#   condition:
+#     - active_loop: auth_form
+#   steps:
+#     - action: auth_form
+#     - active_loop: null
+#     - action: utter_askissue
+
+# - rule: Activate phone number form
+#   steps:
+#     - intent: provide_phone_number
+#     - action: phone_number_form
+#     - active_loop: phone_number_form
 rules:
-- rule: Activate auth form
-  steps:
-    - intent: authorize
-    - action: auth_form
-    - active_loop: auth_form
-
-- rule: Submit auth form
-  condition:
-    - active_loop: auth_form
-  steps:
-    - action: auth_form
-    - active_loop: null
-    - action: utter_askissue
-
-- rule: Activate phone number form
-  steps:
-    - intent: provide_phone_number
-    - action: phone_number_form
-    - active_loop: phone_number_form
-
 - rule: Submit phone number form
   condition:
     - active_loop: phone_number_form

@@ -12,96 +12,97 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %
 logger = logging.getLogger(__name__)
 
 
-class ValidateAuthForm(FormValidationAction):
-    def name(self) -> Text:
-        return "validate_auth_form"
+# --- Begin: Comment out ValidateAuthForm and related authentication code ---
+# class ValidateAuthForm(FormValidationAction):
+#     def name(self) -> Text:
+#         return "validate_auth_form"
 
-    async def validate_username(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any]
-    ) -> Dict[Text, Any]:
-        username = slot_value
-        logger.debug(f"[ValidateAuthForm] Validating username: {username}")
-        print(f"[DEBUG] ValidateAuthForm - Validating username: {username}")
-        print(f"[DEBUG] ValidateAuthForm - All slots: {tracker.current_slot_values()}")
+#     async def validate_username(
+#         self,
+#         slot_value: Any,
+#         dispatcher: CollectingDispatcher,
+#         tracker: Tracker,
+#         domain: Dict[Text, Any]
+#     ) -> Dict[Text, Any]:
+#         username = slot_value
+#         logger.debug(f"[ValidateAuthForm] Validating username: {username}")
+#         print(f"[DEBUG] ValidateAuthForm - Validating username: {username}")
+#         print(f"[DEBUG] ValidateAuthForm - All slots: {tracker.current_slot_values()}")
 
-        # Validate username format
-        if not username or not re.match(r"^[a-zA-Z0-9_]+$", username):
-            logger.debug(f"Invalid username format: {username}")
-            print(f"[DEBUG] ValidateAuthForm - Invalid username format: {username}")
-            dispatcher.utter_message(text="Please provide a valid username (letters, numbers, and underscores only).")
-            print(f"[DEBUG] ValidateAuthForm - Clearing slot: username=None")
-            return {"username": None}
-        if username != "mminds":
-            logger.debug(f"Username is not correct: {username}")
-            print(f"[DEBUG] ValidateAuthForm - Username is not correct: {username}")
-            dispatcher.utter_message(text="Please provide valid credentials.")
-            return {"username": None}
+#         # Validate username format
+#         if not username or not re.match(r"^[a-zA-Z0-9_]+$", username):
+#             logger.debug(f"Invalid username format: {username}")
+#             print(f"[DEBUG] ValidateAuthForm - Invalid username format: {username}")
+#             dispatcher.utter_message(text="Please provide a valid username (letters, numbers, and underscores only).")
+#             print(f"[DEBUG] ValidateAuthForm - Clearing slot: username=None")
+#             return {"username": None}
+#         if username != "mminds":
+#             logger.debug(f"Username is not correct: {username}")
+#             print(f"[DEBUG] ValidateAuthForm - Username is not correct: {username}")
+#             dispatcher.utter_message(text="Please provide valid credentials.")
+#             return {"username": None}
 
-        logger.debug(f"Username format valid: {username}")
-        print(f"[DEBUG] ValidateAuthForm - Username format valid: {username}")
-        return {"username": username}
+#         logger.debug(f"Username format valid: {username}")
+#         print(f"[DEBUG] ValidateAuthForm - Username format valid: {username}")
+#         return {"username": username}
 
-    async def validate_password(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any]
-    ) -> Dict[Text, Any]:
-        password = slot_value
-        username = tracker.get_slot("username")
-        logger.debug(f"[ValidateAuthForm] Validating password: {password}, username: {username}")
-        print(f"[DEBUG] ValidateAuthForm - Validating password: {password}, username: {username}")
-        print(f"[DEBUG] ValidateAuthForm - All slots: {tracker.current_slot_values()}")
+#     async def validate_password(
+#         self,
+#         slot_value: Any,
+#         dispatcher: CollectingDispatcher,
+#         tracker: Tracker,
+#         domain: Dict[Text, Any]
+#     ) -> Dict[Text, Any]:
+#         password = slot_value
+#         username = tracker.get_slot("username")
+#         logger.debug(f"[ValidateAuthForm] Validating password: {password}, username: {username}")
+#         print(f"[DEBUG] ValidateAuthForm - Validating password: {password}, username: {username}")
+#         print(f"[DEBUG] ValidateAuthForm - All slots: {tracker.current_slot_values()}")
 
-        # Validate password format
-        if not password or not re.match(r"^[a-zA-Z0-9]+$", password):
-            logger.debug(f"Invalid password format: {password}")
-            print(f"[DEBUG] ValidateAuthForm - Invalid password format: {password}")
-            dispatcher.utter_message(text="Please provide a valid password (letters and numbers only).")
-            print(f"[DEBUG] ValidateAuthForm - Clearing slot: password=None")
-            return {"password": None}
-        if password != "mm123":
-            logger.debug(f"Password is not correct: {password}")
-            print(f"[DEBUG] ValidateAuthForm - Password is not correct: {password}")
-            dispatcher.utter_message(text="Please provide valid credentials.")
-            return {"password": None}
+#         # Validate password format
+#         if not password or not re.match(r"^[a-zA-Z0-9]+$", password):
+#             logger.debug(f"Invalid password format: {password}")
+#             print(f"[DEBUG] ValidateAuthForm - Invalid password format: {password}")
+#             dispatcher.utter_message(text="Please provide a valid password (letters and numbers only).")
+#             print(f"[DEBUG] ValidateAuthForm - Clearing slot: password=None")
+#             return {"password": None}
+#         if password != "mm123":
+#             logger.debug(f"Password is not correct: {password}")
+#             print(f"[DEBUG] ValidateAuthForm - Password is not correct: {password}")
+#             dispatcher.utter_message(text="Please provide valid credentials.")
+#             return {"password": None}
 
-        # Now validate credentials with API
-        try:
-            response = requests.post(
-                f"http://192.168.4.175:8443/cls_api/auth/authenticate?username={username}&password={password}"
-            )
-            print(f"[DEBUG] ValidateAuthForm - Auth API status: {response.status_code}")
+#         # Now validate credentials with API
+#         try:
+#             response = requests.post(
+#                 f"http://192.168.4.175:8443/cls_api/auth/authenticate?username={username}&password={password}"
+#             )
+#             print(f"[DEBUG] ValidateAuthForm - Auth API status: {response.status_code}")
             
-            if response.status_code == 200 and response.json().get("token"):
-                auth_token = response.json()["token"]
-                logger.debug(f"Authentication successful for username: {username}, token: {auth_token}")
-                print(f"[DEBUG] ValidateAuthForm - Authentication successful: username={username}, token={auth_token}")
-                dispatcher.utter_message(text="Authentication successful! Now, what issue are you facing?")
-                print(f"[DEBUG] ValidateAuthForm - Setting slots: username={username}, password={password}, auth_token={auth_token}")
-                return {
-                    "username": username,
-                    "password": password,
-                    "auth_token": auth_token
-                }
-            else:
-                logger.error(f"Authentication failed for username: {username}, status: {response.status_code}")
-                print(f"[DEBUG] ValidateAuthForm - Authentication failed: username={username}, status={response.status_code}")
-                dispatcher.utter_message(text="Invalid username or password. Please try again.")
-                print(f"[DEBUG] ValidateAuthForm - Clearing slots: username=None, password=None, auth_token=None")
-                return {"username": None, "password": None, "auth_token": None}
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Authentication API call failed: {e}")
-            print(f"[DEBUG] ValidateAuthForm - API call failed: {e}")
-            dispatcher.utter_message(text="Error connecting to the authentication service. Please try again.")
-            print(f"[DEBUG] ValidateAuthForm - Clearing slots: username=None, password=None, auth_token=None")
-            return {"username": None, "password": None, "auth_token": None}
-
+#             if response.status_code == 200 and response.json().get("token"):
+#                 auth_token = response.json()["token"]
+#                 logger.debug(f"Authentication successful for username: {username}, token: {auth_token}")
+#                 print(f"[DEBUG] ValidateAuthForm - Authentication successful: username={username}, token={auth_token}")
+#                 dispatcher.utter_message(text="Authentication successful! Now, what issue are you facing?")
+#                 print(f"[DEBUG] ValidateAuthForm - Setting slots: username={username}, password={password}, auth_token={auth_token}")
+#                 return {
+#                     "username": username,
+#                     "password": password,
+#                     "auth_token": auth_token
+#                 }
+#             else:
+#                 logger.error(f"Authentication failed for username: {username}, status: {response.status_code}")
+#                 print(f"[DEBUG] ValidateAuthForm - Authentication failed: username={username}, status={response.status_code}")
+#                 dispatcher.utter_message(text="Invalid username or password. Please try again.")
+#                 print(f"[DEBUG] ValidateAuthForm - Clearing slots: username=None, password=None, auth_token=None")
+#                 return {"username": None, "password": None, "auth_token": None}
+#         except requests.exceptions.RequestException as e:
+#             logger.error(f"Authentication API call failed: {e}")
+#             print(f"[DEBUG] ValidateAuthForm - API call failed: {e}")
+#             dispatcher.utter_message(text="Error connecting to the authentication service. Please try again.")
+#             print(f"[DEBUG] ValidateAuthForm - Clearing slots: username=None, password=None, auth_token=None")
+#             return {"username": None, "password": None, "auth_token": None}
+# --- End: Comment out ValidateAuthForm and related authentication code ---
 
 class ValidatePhoneNumberForm(FormValidationAction):
     def name(self) -> Text:
@@ -121,13 +122,12 @@ class ValidatePhoneNumberForm(FormValidationAction):
         domain: Dict[Text, Any]
     ) -> Dict[Text, Any]:
         phone_number = slot_value
-        auth_token = tracker.get_slot("auth_token")
-        customer_id = tracker.get_slot("customer_id")
-        credit_balance = tracker.get_slot("credit_balance")
-        logger.debug(f"[ValidatePhoneNumberForm] Slots - phone_number: {phone_number}, auth_token: {auth_token}, customer_id: {customer_id}, credit_balance: {credit_balance}")
-        print(f"[DEBUG] ValidatePhoneNumberForm - phone_number: {phone_number}, auth_token: {auth_token}, customer_id: {customer_id}, credit_balance: {credit_balance}")
+        username = "mminds"
+        password = "mm123"
+        logger.debug(f"[ValidatePhoneNumberForm] Validating phone_number: {phone_number}")
+        print(f"[DEBUG] ValidatePhoneNumberForm - Validating phone_number: {phone_number}")
         print(f"[DEBUG] ValidatePhoneNumberForm - All slots: {tracker.current_slot_values()}")
-
+        # dispatcher.utter_message(text="Checking....")
         # Validate phone number format
         if not phone_number or not re.match(r"^\d{10,12}$", phone_number):
             logger.debug(f"Invalid phone number format: {phone_number}")
@@ -136,15 +136,28 @@ class ValidatePhoneNumberForm(FormValidationAction):
             print(f"[DEBUG] ValidatePhoneNumberForm - Clearing slot: phone_number=None")
             return {"phone_number": None}
 
-        # Check if auth_token is available
-        if not auth_token:
-            logger.debug("No authentication token available")
-            print(f"[DEBUG] ValidatePhoneNumberForm - No authentication token available")
-            dispatcher.utter_message(text="Please authenticate first by providing your username and password.")
-            print(f"[DEBUG] ValidatePhoneNumberForm - Clearing slot: phone_number=None")
+        # Generate auth_token using the authentication API
+        try:
+            response = requests.post(
+                f"http://192.168.4.175:8443/cls_api/auth/authenticate?username={username}&password={password}"
+            )
+            print(f"[DEBUG] ValidatePhoneNumberForm - Auth API status: {response.status_code}")
+            if response.status_code == 200 and response.json().get("token"):
+                auth_token = response.json()["token"]
+                logger.debug(f"Authentication successful for username: {username}, token: {auth_token}")
+                print(f"[DEBUG] ValidatePhoneNumberForm - Authentication successful: username={username}, token={auth_token}")
+            else:
+                logger.error(f"Authentication failed for username: {username}, status: {response.status_code}")
+                print(f"[DEBUG] ValidatePhoneNumberForm - Authentication failed: username={username}, status={response.status_code}")
+                dispatcher.utter_message(text="Authentication failed. Please try again later.")
+                return {"phone_number": None}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Authentication API call failed: {e}")
+            print(f"[DEBUG] ValidatePhoneNumberForm - API call failed: {e}")
+            dispatcher.utter_message(text="Error connecting to the authentication service. Please try again.")
             return {"phone_number": None}
 
-        # API call to validate phone number
+        # API call to validate phone number (existing logic follows)
         customers_url = "http://192.168.4.175:8443/cls_api/getAllCustomers"
         headers = {"Authorization": f"Bearer {auth_token}"}
         try:
@@ -161,7 +174,10 @@ class ValidatePhoneNumberForm(FormValidationAction):
                         return {
                             "phone_number": matched_phone,
                             "customer_id": customer_id,
-                            "credit_balance": credit
+                            "credit_balance": credit,
+                            "username": username,
+                            "password": password,
+                            "auth_token": auth_token
                         }
                     else:
                         logger.warning(f"Phone number {phone_number} not found in customer list.")
@@ -277,16 +293,26 @@ class ActionCheckCreditBalance(Action):
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         credit = tracker.get_slot("credit_balance")
+        name = tracker.get_slot("name")
         if credit is None:
-            dispatcher.utter_message(text="Unable to retrieve credit balance.")
+            msg = f"Unable to retrieve credit balance."
+            if name:
+                msg = f"Unable to retrieve credit balance, {name}."
+            dispatcher.utter_message(text=msg)
             return []
 
         if credit == 0.0:
-            dispatcher.utter_message(text="Your remaining credit is SAR 0.00. Would you like to see your call history?")
+            msg = f"Your remaining credit is SAR 0.00. Would you like to see your call history?"
+            if name:
+                msg = f"{name}, your remaining credit is SAR 0.00. Would you like to see your call history?"
+            dispatcher.utter_message(text=msg)
             current_question = "show_call_history"
         else:
-            credit=100.0
-            dispatcher.utter_message(text=f"Your credit is SAR {credit:.2f}. Are you still unable to make calls?")
+            msg = f"Your credit is SAR {credit:.2f}. Are you still having trouble making calls?"
+            if name:
+                msg = f"{name}, your credit is SAR {credit:.2f}. Are you still having trouble making calls?"
+            dispatcher.utter_message(text=msg)
+            credit=100
             current_question = "still_unable"
 
         return [SlotSet("credit_balance", credit), SlotSet("current_question", current_question)]
@@ -307,26 +333,36 @@ class ActionShowCallHistory(Action):
         phone_number = tracker.get_slot("phone_number")
         customer_id = tracker.get_slot("customer_id")
         auth_token = tracker.get_slot("auth_token")
+        name = tracker.get_slot("name")
         logger.debug(f"[ActionShowCallHistory] Fetching call history for phone_number: {phone_number}, customer_id: {customer_id}, auth_token: {auth_token}")
         print(f"[DEBUG] ActionShowCallHistory - Fetching call history for phone_number: {phone_number}, customer_id: {customer_id}, auth_token: {auth_token}")
         print(f"[DEBUG] ActionShowCallHistory - All slots: {tracker.current_slot_values()}")
 
         if not phone_number:
+            msg = "Please provide a valid phone number first."
+            if name:
+                msg = f"{name}, please provide a valid phone number first."
             logger.debug("[ActionShowCallHistory] Phone number is missing")
             print(f"[DEBUG] ActionShowCallHistory - Phone number is missing")
-            dispatcher.utter_message(text="Please provide a valid phone number first.")
+            dispatcher.utter_message(text=msg)
             return []
 
         if not customer_id:
+            msg = "Customer ID is not set. Please provide your phone number first."
+            if name:
+                msg = f"{name}, customer ID is not set. Please provide your phone number first."
             logger.debug("[ActionShowCallHistory] Customer ID is missing")
             print(f"[DEBUG] ActionShowCallHistory - Customer ID is missing")
-            dispatcher.utter_message(text="Customer ID is not set. Please provide your phone number first.")
+            dispatcher.utter_message(text=msg)
             return []
 
         if not auth_token:
+            msg = "Please authenticate first by providing your username and password."
+            if name:
+                msg = f"{name}, please authenticate first by providing your username and password."
             logger.debug("[ActionShowCallHistory] No authentication token available")
             print(f"[DEBUG] ActionShowCallHistory - No authentication token available")
-            dispatcher.utter_message(text="Please authenticate first by providing your username and password.")
+            dispatcher.utter_message(text=msg)
             return []
 
         # Step 1: Get all customers to verify phone number and customer ID
@@ -336,9 +372,12 @@ class ActionShowCallHistory(Action):
             response = requests.get(customers_url, headers=headers)
             print(f"[DEBUG] ActionShowCallHistory - Customers API status: {response.status_code}")
             if response.status_code != 200:
+                msg = "Error retrieving customer data. Please try again."
+                if name:
+                    msg = f"{name}, error retrieving customer data. Please try again."
                 logger.error(f"[ActionShowCallHistory] Failed to get customers. Status: {response.status_code}")
                 print(f"[DEBUG] ActionShowCallHistory - Failed to get customers. Status: {response.status_code}")
-                dispatcher.utter_message(text="Error retrieving customer data. Please try again.")
+                dispatcher.utter_message(text=msg)
                 return []
 
             customers = response.json()
@@ -347,9 +386,12 @@ class ActionShowCallHistory(Action):
             # Step 2: Verify customer by phone number
             matched_customer = self.find_customer_by_phone(customers, phone_number)
             if not matched_customer or matched_customer.get("id") != customer_id:
+                msg = "Phone number or customer ID not found."
+                if name:
+                    msg = f"{name}, phone number or customer ID not found."
                 logger.warning(f"[ActionShowCallHistory] Phone number {phone_number} or customer ID {customer_id} not found")
                 print(f"[DEBUG] ActionShowCallHistory - Phone number {phone_number} or customer ID {customer_id} not found")
-                dispatcher.utter_message(text="Phone number or customer ID not found.")
+                dispatcher.utter_message(text=msg)
                 return []
 
             # Step 3: Get call history for the customer
@@ -358,24 +400,33 @@ class ActionShowCallHistory(Action):
             print(f"[DEBUG] ActionShowCallHistory - Call history API status: {calls_response.status_code}")
 
             if calls_response.status_code == 417:
+                msg = "No call history found."
+                if name:
+                    msg = f"{name}, no call history found."
                 logger.debug(f"[ActionShowCallHistory] No call history found for customer_id: {customer_id}")
                 print(f"[DEBUG] ActionShowCallHistory - No call history found for customer_id: {customer_id}")
-                dispatcher.utter_message(text="No call history found for this customer.")
+                dispatcher.utter_message(text=msg)
                 return []
 
             if calls_response.status_code != 200:
+                msg = "Error retrieving call history. Please try again."
+                if name:
+                    msg = f"{name}, error retrieving call history. Please try again."
                 logger.error(f"[ActionShowCallHistory] Failed to get call history. Status: {calls_response.status_code}")
                 print(f"[DEBUG] ActionShowCallHistory - Failed to get call history. Status: {calls_response.status_code}")
-                dispatcher.utter_message(text="Error retrieving call history. Please try again.")
+                dispatcher.utter_message(text=msg)
                 return []
 
             calls = calls_response.json()
             print(f"[DEBUG] ActionShowCallHistory - Total calls found: {len(calls)}")
 
             if not calls:
+                msg = "No call history found for this customer."
+                if name:
+                    msg = f"{name}, no call history found for this customer."
                 logger.debug(f"[ActionShowCallHistory] No call history found for customer_id: {customer_id}")
                 print(f"[DEBUG] ActionShowCallHistory - No call history found for customer_id: {customer_id}")
-                dispatcher.utter_message(text="No call history found for this customer.")
+                dispatcher.utter_message(text=msg)
                 return []
 
             # Step 4: Format top 5 calls
@@ -386,18 +437,27 @@ class ActionShowCallHistory(Action):
             ])
             logger.debug(f"[ActionShowCallHistory] Call history retrieved: \n{call_history}")
             print(f"[DEBUG] ActionShowCallHistory - Call history retrieved: \n{call_history}")
-            dispatcher.utter_message(text=f"Here are your top 5 recent calls:\n{call_history}")
+            msg = f"Here are your top 5 recent calls:\n{call_history}"
+            if name:
+                msg = f"{name}, here are your top 5 recent calls:\n{call_history}"
+            dispatcher.utter_message(text=msg)
             return []
 
         except requests.exceptions.RequestException as e:
+            msg = "Error connecting to the call history service. Please try again."
+            if name:
+                msg = f"{name}, error connecting to the call history service. Please try again."
             logger.error(f"[ActionShowCallHistory] Error connecting to API: {e}")
             print(f"[DEBUG] ActionShowCallHistory - Error connecting to API: {e}")
-            dispatcher.utter_message(text="Error connecting to the call history service. Please try again.")
+            dispatcher.utter_message(text=msg)
             return []
         except Exception as e:
+            msg = "Error processing call history data. Please try again."
+            if name:
+                msg = f"{name}, error processing call history data. Please try again."
             logger.error(f"[ActionShowCallHistory] Failed to parse call history: {e}")
             print(f"[DEBUG] ActionShowCallHistory - Failed to parse call history: {e}")
-            dispatcher.utter_message(text="Error processing call history data. Please try again.")
+            dispatcher.utter_message(text=msg)
             return []
 
 class ActionConnectToRepresentative(Action):
@@ -409,7 +469,7 @@ class ActionConnectToRepresentative(Action):
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         logger.debug(f"[ActionConnectToRepresentative] Executing, Current slots: {tracker.current_slot_values()}")
         print(f"[DEBUG] ActionConnectToRepresentative - Executing, Current slots: {tracker.current_slot_values()}")
-        dispatcher.utter_message(text="Let me connect you to a Customer Service Representative.")
+        dispatcher.utter_message(text="I’ll connect you to a Customer Service Representative shortly.")
         return []
 
 class ActionOfferCreditIncrease(Action):
@@ -433,11 +493,28 @@ class ActionPresentPackages(Action):
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         logger.debug(f"[ActionPresentPackages] Executing, Current slots: {tracker.current_slot_values()}")
         print(f"[DEBUG] ActionPresentPackages - Executing, Current slots: {tracker.current_slot_values()}")
-        dispatcher.utter_message("Based on your usage, here are some suitable packages:")
-        dispatcher.utter_message("A. VoxEdge package Additional Minutes: +100 Validity: 30 days @ $1.99")
-        dispatcher.utter_message("B. VoxEdge package Additional Minutes: +175 Validity: 60 days @ $3.99")
-        dispatcher.utter_message("C. VoxEdge package Additional Minutes: +300 Validity: 90 days @ $8.99")
-        dispatcher.utter_message("Please choose A, B, or C.")
+        dispatcher.utter_message(
+            attachment={
+                "type": "carousel",
+                "packages": [
+                    {
+                        "title": "A. VoxEdge package",
+                        "details": "Additional Minutes: +100\nValidity: 30 days\nPrice: $1.99",
+                        "id": "A"
+                    },
+                    {
+                        "title": "B. VoxEdge package",
+                        "details": "Additional Minutes: +175\nValidity: 60 days\nPrice: $3.99",
+                        "id": "B"
+                    },
+                    {
+                        "title": "C. VoxEdge package",
+                        "details": "Additional Minutes: +300\nValidity: 90 days\nPrice: $8.99",
+                        "id": "C"
+                    }
+                ],
+            }
+        )
         return [SlotSet("current_question", "choose_package"),SlotSet("username", None),SlotSet("password", None),SlotSet("auth_token", None)]
 
 class ActionUpgradePackage(Action):
@@ -450,12 +527,14 @@ class ActionUpgradePackage(Action):
         package_choice = tracker.get_slot("package_choice")
         logger.debug(f"[ActionUpgradePackage] Upgrading package: {package_choice}, Current slots: {tracker.current_slot_values()}")
         print(f"[DEBUG] ActionUpgradePackage - Upgrading package: {package_choice}, Current slots: {tracker.current_slot_values()}")
-        if package_choice in ["A", "B", "C"]:
-            dispatcher.utter_message(response="utter_upgrade_confirmation", package_choice=package_choice)
-            return []
-        else:
-            dispatcher.utter_message(text="Invalid package choice. Please choose A, B, or C.")
-            return [SlotSet("package_choice", None)]
+        if package_choice:
+            package_choice_upper = str(package_choice).strip().upper()
+            print(f"[DEBUG] ActionUpgradePackage - Normalized package_choice: {package_choice_upper}")
+            if package_choice_upper in ["A", "B", "C"]:
+                dispatcher.utter_message(response="utter_upgrade_confirmation", package_choice=package_choice_upper)
+                return []
+        dispatcher.utter_message(text="Invalid package choice. Please choose A, B, or C.")
+        return [SlotSet("package_choice", None)]
 
 class ActionOfferRepresentative(Action):
     def name(self) -> Text:
@@ -468,84 +547,3 @@ class ActionOfferRepresentative(Action):
         print(f"[DEBUG] ActionOfferRepresentative - Executing, Current slots: {tracker.current_slot_values()}")
         dispatcher.utter_message(response="utter_offer_representative")
         return [SlotSet("current_question", "speak_to_representative")]
-# class ActionHandleAffirm(Action):
-#     def name(self) -> Text:
-#         return "action_handle_affirm"
-
-#     def run(self, dispatcher: CollectingDispatcher,
-#             tracker: Tracker,
-#             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-#         current_question = tracker.get_slot("current_question")
-#         if current_question == "show_call_history":
-#             dispatcher.utter_message(response="utter_offer_credit_increase")
-#             return [SlotSet("current_question", "credit_increase")]
-#         elif current_question == "credit_increase":
-#             dispatcher.utter_message(response="utter_present_packages")
-#             return [SlotSet("current_question", "choose_package")]
-#         elif current_question == "still_unable" or current_question == "speak_to_representative":
-#             dispatcher.utter_message(text="Let me connect you to a Customer Service Representative")
-#             return [SlotSet("current_question", None)]
-#         else:
-#             dispatcher.utter_message(response="utter_default")
-#             return []
-
-# class ActionHandleDeny(Action):
-#     def name(self) -> Text:
-#         return "action_handle_deny"
-
-#     def run(self, dispatcher: CollectingDispatcher,
-#             tracker: Tracker,
-#             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-#         current_question = tracker.get_slot("current_question")
-#         if current_question == "show_call_history":
-#             dispatcher.utter_message(response="utter_offer_credit_increase")
-#             return [SlotSet("current_question", "credit_increase")]
-#         elif current_question == "credit_increase":
-#             dispatcher.utter_message(response="utter_offer_representative")
-#             return [SlotSet("current_question", "speak_to_representative")]
-#         elif current_question == "speak_to_representative":
-#             dispatcher.utter_message(response="utter_offer_assistance")
-#             return [SlotSet("current_question", None)]
-#         else:
-#             dispatcher.utter_message(response="utter_default")
-#             return []
-
-# class ActionUpgradePackage(Action):
-#     def name(self) -> Text:
-#         return "action_upgrade_package"
-
-#     def run(self, dispatcher: CollectingDispatcher,
-#             tracker: Tracker,
-#             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-#         package_choice = tracker.get_slot("package_choice")
-#         customer_id = tracker.get_slot("customer_id")
-#         auth_token = tracker.get_slot("auth_token")
-#         if not package_choice:
-#             dispatcher.utter_message(text="No package selected. Please choose a package (A, B, or C).")
-#             return []
-#         if not customer_id:
-#             dispatcher.utter_message(text="Customer ID is not set. Please provide your phone number first.")
-#             return []
-#         if not auth_token:
-#             dispatcher.utter_message(text="Authentication token is missing. Please authenticate first.")
-#             return []
-#         # Simulate API call to upgrade package (replace with actual API call)
-#         try:
-#             # Placeholder for API call to upgrade package
-#             # Example: requests.post(f"http://192.168.4.175:8443/cls_api/upgradePackage?customerId={customer_id}&package={package_choice}", headers={"Authorization": f"Bearer {auth_token}"})
-#             dispatcher.utter_message(response="utter_confirmation")
-#             return []
-#         except Exception as e:
-#             logger.error(f"Failed to upgrade package: {e}")
-#             dispatcher.utter_message(text="Error upgrading package. Please try again.")
-#             return []
-
-# class ActionConnectToRepresentative(Action):
-#     def name(self) -> Text:
-#         return "action_connect_to_representative"
-#
-#     def run(self, dispatcher: CollectingDispatcher,
-#             tracker: Tracker,
-#             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-#         dispatcher.utter_message(text="Let me connect you to a Customer Service Representative")
-#         return []
